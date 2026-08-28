@@ -8,63 +8,102 @@
 <link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
 <style>
 :root{
-  --bg:#06070f; --panel:#0c1020; --line:#26305a; --text:#c6cde3; --dim:#5e6a94;
+  --bg:#06070f; --panel:#090b16; --line:#26305a; --text:#c6cde3; --dim:#5e6a94;
   --amber:#e9b34e; --cyan:#5ad6d6; --rust:#c9583a; --gm:#8e5cc7;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:18px/1.25 "VT323",monospace}
 button,input,select{font:inherit;color:inherit}
-button{background:transparent;border:1px solid var(--line);padding:2px 10px;cursor:pointer;text-transform:uppercase;font-family:"Silkscreen",monospace;font-size:9px;letter-spacing:.5px}
-button:hover,button.on{background:var(--line)}
-button:focus-visible,textarea:focus-visible,.tab:focus-visible{outline:2px solid var(--cyan);outline-offset:1px}
+button{background:transparent;border:0;padding:0 2px;cursor:pointer;text-transform:uppercase;color:var(--cyan);font:inherit}
+button::before{content:"["}
+button::after{content:"]"}
+button::before,button::after{color:var(--dim)}
+button:hover{background:var(--cyan);color:#06070f}
+button:hover::before,button:hover::after{color:#06070f}
+button u,#menu u{color:var(--amber);text-decoration:none}
+button:hover u{color:#06070f}
+button:focus-visible,textarea:focus-visible,.tab:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
 #app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr 360px;height:100%}
-header{grid-column:1/3;display:flex;align-items:center;gap:8px;padding:6px 10px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
-header h1{margin:0 12px 0 0;font:11px "Silkscreen",monospace;color:var(--amber);letter-spacing:1px}
-#crumbs{display:flex;gap:6px;align-items:center;flex:1;min-width:120px}
-#crumbs a{color:var(--cyan);cursor:pointer;text-decoration:none}
-#crumbs a:hover{text-decoration:underline}
+header{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:4px 8px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{margin:0;font:inherit;font-size:18px;background:var(--amber);color:#06070f;padding:0 8px;letter-spacing:1px}
+#crumbs{display:flex;gap:2px;align-items:center;flex:0 1 auto;min-width:0;white-space:nowrap;overflow:hidden}
+#crumbs a{color:var(--text);cursor:pointer;text-decoration:none;text-transform:uppercase;padding:0 2px}
+#crumbs a:hover{background:var(--text);color:#06070f}
 #crumbs span.sep{color:var(--dim)}
+@keyframes blink{50%{opacity:0}}
+#search{position:relative;flex:1;min-width:110px}
+#q{width:100%;background:transparent;border:0;border-bottom:1px dotted var(--line);color:var(--text);padding:0 2px;font:inherit}
+#q::placeholder{color:#39406a}
+#q:focus{outline:0;border-bottom:1px solid var(--cyan)}
+#q:focus::placeholder{color:transparent}
+#sresults{position:absolute;left:0;right:0;top:calc(100% + 3px);background:#070910;border:1px solid var(--cyan);box-shadow:5px 5px 0 #000;display:none;z-index:9;max-height:55vh;overflow:auto}
+#sresults.open{display:block}
+#sresults .sr{padding:2px 8px;cursor:pointer;display:flex;gap:8px;align-items:baseline;white-space:nowrap;overflow:hidden}
+#sresults .who{color:var(--amber)}
+#sresults .what{color:var(--cyan)}
+#sresults .k{color:var(--dim);font-size:15px;text-transform:uppercase;overflow:hidden;text-overflow:ellipsis}
+#sresults .sr.act,#sresults .sr:hover{background:var(--cyan)}
+#sresults .sr.act span,#sresults .sr:hover span{color:#06070f}
 #stage{position:relative;overflow:hidden;background:var(--bg)}
 canvas{image-rendering:pixelated;image-rendering:crisp-edges;position:absolute;left:0;top:0;cursor:crosshair}
-#hint{position:absolute;left:8px;bottom:6px;color:var(--dim);font-size:15px;pointer-events:none}
+#hint{position:absolute;left:8px;bottom:6px;color:var(--dim);font-size:16px;pointer-events:none}
+#hint:not(:empty)::before{content:"> "}
 aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
-.tabs{display:flex;border-bottom:1px solid var(--line)}
-.tab{flex:1;padding:6px;text-align:center;cursor:pointer;font:9px "Silkscreen",monospace;text-transform:uppercase;color:var(--dim);border-right:1px solid var(--line)}
-.tab.on{color:var(--amber);background:#11162c}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:#070910}
+.tab{flex:1;padding:3px 6px;text-align:center;cursor:pointer;font:inherit;font-size:17px;text-transform:uppercase;color:var(--dim)}
+.tab+.tab{border-left:1px solid var(--line)}
+.tab:hover{color:var(--text)}
+.tab.on{color:#06070f;background:var(--amber)}
 .pane{display:none;flex:1;min-height:0;overflow:auto;padding:10px 12px}
 .pane.on{display:block}
 #edit.pane.on{display:flex;flex-direction:column;padding:0}
-textarea{flex:1;width:100%;resize:none;border:0;background:#080a16;color:var(--text);padding:10px;font:16px/1.3 "VT323",monospace;tab-size:2}
-.editbar{display:flex;gap:6px;padding:6px;border-top:1px solid var(--line);align-items:center;color:var(--dim);font-size:15px}
-h2.name{font:13px "Silkscreen",monospace;color:var(--amber);margin:0 0 2px;text-transform:uppercase}
-.kind{color:var(--dim);font-size:15px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
+textarea{flex:1;width:100%;resize:none;border:0;background:#070910;color:var(--text);padding:10px;font:16px/1.3 "VT323",monospace;tab-size:2}
+.editbar{display:flex;gap:6px;padding:4px 8px;border-top:1px solid var(--line);align-items:center;color:var(--dim);font-size:15px}
+.editbar span::before{content:"> "}
+.pane::-webkit-scrollbar,textarea::-webkit-scrollbar{width:10px}
+.pane::-webkit-scrollbar-track,textarea::-webkit-scrollbar-track{background:#070910}
+.pane::-webkit-scrollbar-thumb,textarea::-webkit-scrollbar-thumb{background:var(--line)}
+h2.name{font:inherit;font-size:22px;color:var(--amber);margin:0 0 2px;text-transform:uppercase}
+h2.name::before{content:"> ";color:var(--dim)}
+.kind{color:var(--dim);font-size:16px;text-transform:uppercase;letter-spacing:1px;margin-bottom:8px}
 table.meta{border-collapse:collapse;width:100%;margin:6px 0 10px}
 table.meta td{padding:1px 6px 1px 0;vertical-align:top;border-bottom:1px dotted #1b2140}
 table.meta td:first-child{color:var(--cyan);white-space:nowrap;width:1%;text-transform:lowercase}
 .desc p{margin:0 0 8px}
 .desc a{color:var(--cyan)}
-.gm{border-left:3px solid var(--gm);background:#161226;padding:6px 8px;margin:8px 0;color:#d8c8f0}
-.gm::before{content:"GM";font:8px "Silkscreen",monospace;color:var(--gm);display:block;margin-bottom:2px}
+.gm{border-left:3px solid var(--gm);background:#100c1c;padding:5px 8px;margin:8px 0;color:#d8c8f0}
+.gm::before{content:"── GM ──";color:var(--gm);display:block;margin-bottom:2px;font-size:15px}
 .gm p{margin:0 0 4px}
-h3.sub{font:9px "Silkscreen",monospace;color:var(--dim);text-transform:uppercase;margin:14px 0 4px;border-bottom:1px solid var(--line);padding-bottom:2px}
+h3.sub{font:inherit;font-size:16px;font-weight:normal;color:var(--dim);text-transform:uppercase;margin:14px 0 4px;letter-spacing:1px}
+h3.sub::before{content:"── "}
+h3.sub::after{content:" ─────────────────";letter-spacing:0;overflow:hidden}
 ul.track{list-style:none;margin:0;padding:0}
 ul.track li{padding:2px 0;border-bottom:1px dotted #1b2140}
 ul.track .who{color:var(--amber)}
 ul.track .what{color:var(--cyan)}
 ul.track .where{color:var(--dim);cursor:pointer}
-ul.track .where:hover{color:var(--text)}
+ul.track .where:hover{background:var(--dim);color:#06070f}
 ul.kids{list-style:none;margin:0;padding:0}
 ul.kids li{padding:2px 0;cursor:pointer;display:flex;gap:8px}
-ul.kids li:hover{color:var(--cyan)}
-ul.kids .t{color:var(--dim);width:64px;flex:none;font-size:14px;text-transform:uppercase}
+ul.kids li:hover{background:#11162c}
+ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:uppercase}
 .sw{display:inline-block;width:10px;height:10px;border:1px solid var(--line);vertical-align:middle;margin-right:4px}
 .empty{color:var(--dim)}
-#status{color:var(--dim);font-size:15px}
+#status{color:var(--dim);font-size:16px}
 #status.err{color:var(--rust)}
+#opts{position:relative}
+#bOpts .mob{display:none}
+#menu{position:absolute;right:0;top:calc(100% + 3px);background:#070910;border:1px solid var(--cyan);box-shadow:5px 5px 0 #000;display:none;flex-direction:column;min-width:170px;z-index:9;padding:2px 0}
+#menu.open{display:flex}
+#menu button{border:0;text-align:left;padding:3px 12px;color:var(--text)}
+#menu button::before,#menu button::after{content:""}
+#menu button:hover{background:var(--cyan);color:#06070f}
 @media (max-width:820px){
   #app{grid-template-columns:1fr;grid-template-rows:auto 55vh 1fr}
   header{grid-column:1}
   aside{border-left:0;border-top:1px solid var(--line)}
+  #bOpts .lbl{display:none}
+  #bOpts .mob{display:inline}
 }
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 </style>
@@ -72,21 +111,26 @@ ul.kids .t{color:var(--dim);width:64px;flex:none;font-size:14px;text-transform:u
 <body>
 <div id="app">
   <header>
-    <h1>Starchart</h1>
+    <h1>STARCHART</h1>
     <div id="crumbs"></div>
+    <div id="search"><input id="q" placeholder="find… ( / )" autocomplete="off" spellcheck="false"><div id="sresults"></div></div>
     <span id="status"></span>
-    <button id="bGM" class="on" title="Show or hide GM notes">GM notes</button>
-    <button id="bAnim" title="Animate orbits in system view">Orbits</button>
-    <button id="bOpen">Open</button>
-    <button id="bSave">Save</button>
-    <button id="bExport" title="Save a copy with all GM notes removed">Player copy</button>
+    <div id="opts">
+      <button id="bOpts" title="Options"><span class="lbl">Options</span><span class="mob">Opt</span></button>
+      <div id="menu">
+        <button id="bOpen"><u>O</u>pen file</button>
+        <button id="bTilt"><u>V</u>iew: tilted</button>
+        <button id="bAnim">Or<u>b</u>its: on</button>
+        <button id="bCopy"><u>C</u>opy markdown</button>
+      </div>
+    </div>
     <input type="file" id="file" accept=".md,.txt,.markdown" hidden>
   </header>
   <div id="stage"><canvas id="cv"></canvas><div id="hint"></div></div>
   <aside>
     <div class="tabs">
       <div class="tab on" data-p="info" tabindex="0">Info</div>
-      <div class="tab" data-p="track" tabindex="0">Track</div>
+      <div class="tab" data-p="track" tabindex="0">Directory</div>
       <div class="tab" data-p="edit" tabindex="0">Edit</div>
     </div>
     <div class="pane on" id="info"></div>
@@ -163,6 +207,30 @@ pattern: craters
 
 Dead rock. Halcyon's comms relay sits on the far side.
 
+#### Halcyon relay
+type: relay
+orbit: Tannhauser IV
+
+Uncrewed comms platform. Squawks every ninety seconds.
+
+### Iron Maru
+type: ship
+look: freighter
+between: Tannhauser IV, Tannhauser VII
+at: 35
+factions: Halcyon Mining
+
+Drone fuel tanker on the long haul out to the gas giant.
+
+### The Corvid
+type: ship
+look: gunship
+between: Tannhauser, Vega Deep
+at: 55
+factions: Colonial Marshals
+
+Marshal patrol cutter, outbound. Shows on the sector chart.
+
 ### Tannhauser II
 type: planet
 orbit: 1
@@ -190,6 +258,14 @@ Gas giant. Halcyon skims fuel from the upper atmosphere with drone tankers.
 
 > GM: One of the drone tankers went silent eleven days ago. Its last telemetry
 > showed it descending, not ascending.
+
+#### KT-9
+type: derelict
+orbit: Tannhauser VII
+
+The silent drone. Still in orbit, still not answering.
+
+> GM: It is not empty.
 
 ### Belt Kessler
 type: belt
@@ -325,7 +401,7 @@ function parse(text){
       if(cur)flushGM();
       const depth=h[1].length; let name=h[2].trim();
       let type=null;
-      const pre=name.match(/^(sector|system|planet|moon|station|belt|location|body|derelict|asteroid)\s*:\s*(.*)$/i);
+      const pre=name.match(/^(sector|system|planet|moon|station|belt|location|body|derelict|asteroid|ship|relay)\s*:\s*(.*)$/i);
       if(pre){type=pre[1].toLowerCase();name=pre[2].trim()}
       const node={depth,type,name,meta:{},desc:[],gm:[],people:[],objects:[],children:[],line:i};
       while(stack.length>1&&stack[stack.length-1].depth>=depth)stack.pop();
@@ -368,16 +444,26 @@ function descendants(n,acc=[]){n.children.forEach(c=>{acc.push(c);descendants(c,
 function findId(root,id){if(root.id===id)return root;for(const c of root.children){const r=findId(c,id);if(r)return r}return null}
 
 /* ---------- state ---------- */
-let TEXT='', ROOT=null, VIEW={level:'galaxy',node:null}, SEL=null, HOVER=null, SHOWGM=true, ITEMS=[], S=2, W=400, H=250;
+let TEXT='', ROOT=null, VIEW={level:'galaxy',node:null}, SEL=null, HOVER=null, ITEMS=[], S=2, W=400, H=250;
 let ANIM=!matchMedia('(prefers-reduced-motion: reduce)').matches, RAF=null;
+let WARDEN=/warden/i.test(location.hash), TILT=true;
+const stripGM=t=>t.split(/\r?\n/).filter(l=>!/^\s*>/.test(l)).join('\n').replace(/\n{3,}/g,'\n\n');
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
 const stage=document.getElementById('stage'), src=document.getElementById('src'), status=document.getElementById('status');
 
 function load(text){
-  TEXT=text; src.value=text; ROOT=parse(text);
+  TEXT=text; syncEditor(); ROOT=parse(text);
   if(VIEW.node){const n=findId(ROOT,VIEW.node.id);VIEW.node=n||null;if(!n)VIEW.level='galaxy'}
   if(SEL){SEL=findId(ROOT,SEL.id)}
   resize(); renderCrumbs(); renderPanel(); renderTrack(); kickAnim();
+}
+function syncEditor(){
+  const want=WARDEN?TEXT:stripGM(TEXT);
+  if(src.value!==want)src.value=want;
+  src.readOnly=!WARDEN;
+  document.querySelector('.editbar span').textContent=WARDEN
+    ?'This text is the live document — edits redraw the map. Copy it out (Options) to keep it.'
+    :'Read-only player copy — GM notes are stripped. Copy freely.';
 }
 
 /* ---------- drawing primitives ---------- */
@@ -432,6 +518,77 @@ function drawPlanet(cx,cy,r,node){
   ringPass(true);
   node._cols=cols;
 }
+/* ---------- sprites ---------- */
+const SPRC={o:'#323a52',h:'#707a94',l:'#b0b8cc',c:'#5ad6d6',e:'#e9b34e',r:'#c9583a'};
+const SPR={
+freighter:[
+"..hhhhhhh..",
+"ehlhlhlhhc.",
+"ehlhlhlhhcc",
+"ehlhlhlhhc.",
+"..hhhhhhh.."],
+shuttle:[
+"e.hhll..",
+"ehhhlllc",
+"e.hhll.."],
+gunship:[
+"..hhh.r...",
+"ehhhhhhllc",
+"..hhh.r..."],
+ring:[
+"..lll..",
+".l...l.",
+"l..h..l",
+"l.hch.l",
+"l..h..l",
+".l...l.",
+"..lll.."],
+spin:[
+"l.....l",
+".h...h.",
+"..hch..",
+"..chc..",
+"..hch..",
+".h...h.",
+"l.....l"],
+spar:[
+"..c..",
+"..h..",
+".lhl.",
+"..h..",
+".lhl.",
+"..h..",
+".ooo.",
+"..e.."],
+derelict:[
+"..oh.oo...",
+".ohh..oho.",
+"oo.h.ooh.o",
+"....o..o.."],
+relay:[
+"...l...",
+"ll.h.ll",
+"ll.c.ll",
+"ll.h.ll"]
+};
+const SPRTYPES={station:1,ship:1,derelict:1,relay:1};
+function lookFor(n){
+  if(n.meta.look&&SPR[n.meta.look])return n.meta.look;
+  const s=hash(n.name+'spr');
+  if(n.type==='ship')return ['freighter','shuttle','gunship'][s%3];
+  if(n.type==='station')return ['ring','spin','spar'][s%3];
+  return SPR[n.type]?n.type:'shuttle';
+}
+function drawSprite(cx,cy,key,ang=0){
+  const g=SPR[key], gh=g.length, gw=g[0].length;
+  const R=Math.ceil(Math.hypot(gw,gh)/2), ca=Math.cos(ang), sa=Math.sin(ang);
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    const sx=Math.round(dx*ca+dy*sa+gw/2-.5), sy=Math.round(-dx*sa+dy*ca+gh/2-.5);
+    if(sx<0||sy<0||sx>=gw||sy>=gh)continue;
+    const ch=g[sy][sx]; if(ch==='.')continue;
+    px(cx+dx,cy+dy,SPRC[ch]);
+  }
+}
 function drawStar(cx,cy,r,color){
   const rr=r+.5;
   for(let y=-r-3;y<=r+3;y++)for(let x=-r-3;x<=r+3;x++){
@@ -480,55 +637,144 @@ function drawSector(){
   const sec=VIEW.node; starfield(hash(sec.name),.005);
   const pad=34; const pos={};
   sec.children.forEach(s=>{pos[s.name.toLowerCase()]=mapXY(s,pad)});
+  const rects=[];
+  const collide=r=>rects.some(o=>r.x<o.x+o.w&&o.x<r.x+r.w&&r.y<o.y+o.h&&o.y<r.y+r.h);
+  const measure=t=>{ctx.font='8px Silkscreen, monospace';return Math.ceil(ctx.measureText(t).width)+4};
+  const putLabel=(r,t,c)=>{ctx.fillStyle='#06070f';ctx.fillRect(r.x,r.y,r.w,r.h);text(r.x+2,r.y+2,t,c,'left');rects.push(r)};
+  // routes
+  const seen=new Set(), dists=[];
   sec.children.forEach(s=>{
     const j=(s.meta.jump||'').split(',').map(t=>t.trim()).filter(Boolean);
     j.forEach(t=>{const m=t.match(/^(.*?)\s*(?:\((\d+(?:\.\d+)?)\))?$/);const o=pos[m[1].toLowerCase()];if(!o)return;
-      const [x1,y1]=pos[s.name.toLowerCase()],[x2,y2]=o;drawRoute(x1,y1,x2,y2,'#2a3560');
-      if(m[2]&&s.name.toLowerCase()<m[1].toLowerCase())text((x1+x2)/2,(y1+y2)/2-4,m[2],'#5e6a94','center');});
+      const key=[s.name.toLowerCase(),m[1].toLowerCase()].sort().join('|');
+      if(seen.has(key))return; seen.add(key);
+      const [x1,y1]=pos[s.name.toLowerCase()],[x2,y2]=o;
+      drawRoute(x1,y1,x2,y2,'#2a3560');
+      if(m[2])dists.push([x1,y1,x2,y2,m[2]]);});
   });
+  // stars
   sec.children.forEach(s=>{
     const [x,y]=pos[s.name.toLowerCase()]; const hot=HOVER===s||SEL===s;
     drawStar(x,y,3,STAR[s.meta.star]||'#e0e4ff');
     const nb=s.children.filter(c=>c.type==='planet').length;
-    for(let i=0;i<nb;i++)px(x-nb+i*2+1,y+8,'#8892b8');
-    text(x,y+11,s.name.toUpperCase(),hot?'#e9b34e':'#c6cde3','center');
+    for(let i=0;i<nb;i++)px(x-nb+i*2+1,y+7,'#8892b8');
     if(hot)box(x-9,y-9,18,18,'#e9b34e');
+    rects.push({x:Math.round(x)-10,y:Math.round(y)-10,w:20,h:20});
     ITEMS.push({x,y,r:11,node:s});
+  });
+  // ships in transit between two systems
+  const ships=[];
+  descendants(sec).filter(c=>c.meta.between).forEach(c=>{
+    const p=c.meta.between.split(',').map(t=>t.trim().toLowerCase());
+    const A=pos[p[0]], B=pos[p[1]]; if(!A||!B)return;
+    const f=Math.max(.1,Math.min(.9,c.meta.at?+c.meta.at/100:.3+(hash(c.name)%41)/100));
+    const x=Math.round(A[0]+(B[0]-A[0])*f), y=Math.round(A[1]+(B[1]-A[1])*f);
+    drawSprite(x,y,lookFor(c),Math.atan2(B[1]-A[1],B[0]-A[0]));
+    if(HOVER===c||SEL===c)box(x-8,y-8,16,16,'#e9b34e');
+    rects.push({x:x-9,y:y-9,w:18,h:18});
+    ITEMS.push({x,y,r:9,node:c});
+    ships.push([x,y,c]);
+  });
+  // jump distances: slide along the route to a free spot
+  dists.forEach(([x1,y1,x2,y2,d])=>{
+    const w=measure(d);
+    for(const f of [.5,.38,.62,.28,.72,.2,.8]){
+      const r={x:Math.round(x1+(x2-x1)*f-w/2),y:Math.round(y1+(y2-y1)*f-6),w,h:12};
+      if(!collide(r)){putLabel(r,d,'#8496c8');break}
+    }
+  });
+  // system names: below, above, right, left — first free spot wins
+  sec.children.forEach(s=>{
+    const [x,y]=pos[s.name.toLowerCase()]; const hot=HOVER===s||SEL===s;
+    const nm=s.name.toUpperCase(), w=measure(nm), X=Math.round(x), Y=Math.round(y);
+    const cands=[
+      {x:X-(w>>1),y:Y+11,w,h:12},{x:X-(w>>1),y:Y-23,w,h:12},
+      {x:X+11,y:Y-6,w,h:12},{x:X-11-w,y:Y-6,w,h:12}
+    ].filter(r=>r.x>0&&r.x+r.w<W&&r.y>0&&r.y+r.h<H);
+    const r=cands.find(r=>!collide(r))||cands[0]||{x:X-(w>>1),y:Y+11,w,h:12};
+    putLabel(r,nm,hot?'#e9b34e':'#c6cde3');
+  });
+  ships.forEach(([x,y,c])=>{
+    const hot=HOVER===c||SEL===c;
+    const nm=c.name.toUpperCase(), w=measure(nm);
+    const cands=[
+      {x:x-(w>>1),y:y+10,w,h:12},{x:x-(w>>1),y:y-22,w,h:12},
+      {x:x+10,y:y-6,w,h:12},{x:x-10-w,y:y-6,w,h:12}
+    ].filter(r=>r.x>0&&r.x+r.w<W&&r.y>0&&r.y+r.h<H);
+    const r=cands.find(r=>!collide(r))||cands[0];
+    if(r)putLabel(r,nm,hot?'#e9b34e':'#8fa0c4');
   });
   text(W/2,4,sec.name.toUpperCase(),'#5e6a94','center');
 }
 function drawSystem(){
   const sys=VIEW.node, AT=ANIM?performance.now()/1000:0; starfield(hash(sys.name),.003);
   const cx=Math.round(W*.5), cy=Math.round(H*.5);
+  const K=TILT?.45:1;
   const bodies=sys.children.filter(c=>typeof c.orbit==='number');
   const maxO=Math.max(1,...bodies.map(b=>b.orbit));
-  const gap=Math.min(H,W)*.46/(maxO+.5);
-  const sr=Math.max(5,Math.round(gap*.35));
+  const gap=Math.min(H/K,W)*.46/(maxO+.5);
+  const sr=Math.max(5,Math.round(Math.min(gap*.35,H*.09)));
   for(const b of bodies){const ro=sr+b.orbit*gap;
-    for(let a=0;a<720;a++){const t=a/720*6.2832;if((a&3)!==0)continue;px(cx+Math.cos(t)*ro,cy+Math.sin(t)*ro*.999,'#1c2242')}}
-  drawStar(cx,cy,sr,STAR[sys.meta.star]||'#e0e4ff');
-  ITEMS.push({x:cx,y:cy,r:sr+2,node:sys});
-  bodies.forEach(b=>{
-    const ro=sr+b.orbit*gap, ang=(hash(b.name)%360)/180*Math.PI+AT*6.2832/(90*Math.pow(b.orbit,1.4));
-    const x=Math.round(cx+Math.cos(ang)*ro), y=Math.round(cy+Math.sin(ang)*ro);
-    const hot=HOVER===b||SEL===b;
-    if(b.type==='belt'){const R=rng(hash(b.name));for(let i=0;i<160;i++){const t=R()*6.2832,d=ro+(R()-.5)*gap*.35;px(cx+Math.cos(t)*d,cy+Math.sin(t)*d,R()>.5?'#6a6a72':'#3a3a44')}
-      text(x,y-10,b.name.toUpperCase(),hot?'#e9b34e':'#5e6a94','center');ITEMS.push({x,y,r:8,node:b});return}
-    if(b.type==='station'){box(x-3,y-3,6,6,hot?'#e9b34e':'#5ad6d6');px(x,y,'#5ad6d6');
-      text(x,y+7,b.name.toUpperCase(),hot?'#e9b34e':'#c6cde3','center');ITEMS.push({x,y,r:7,node:b});return}
-    const size=b.meta.size?+b.meta.size:null;
-    const r=Math.max(4,Math.round(size||(b.type==='planet'?(4+(hash(b.name+'r')%5)):3)));
-    drawPlanet(x,y,r,b);
-    // satellites
+    for(let a=0;a<720;a++){const t=a/720*6.2832;if((a&3)!==0)continue;px(cx+Math.cos(t)*ro,cy+Math.sin(t)*ro*K,'#1c2242')}}
+  const posOf={}; posOf[sys.name.toLowerCase()]=[cx,cy];
+  const drawSats=(b,x,y,r,ang,phase)=>{
     const sats=sys.children.concat(b.children).filter(c=>typeof c.orbit==='string'&&c.orbit.toLowerCase()===b.name.toLowerCase()&&c!==b);
-    sats.forEach((s,i)=>{const sa=ang+1.2+i*1.1+AT*.1, sd=r+6+i*3, sx=Math.round(x+Math.cos(sa)*sd), sy=Math.round(y+Math.sin(sa)*sd);
+    sats.forEach((s,i)=>{
+      const sw=(0.8+((hash(s.name+'j')%41)/100))*((hash(s.name+'d')%4)?1:-1);
+      const sa=ang+1.2+i*1.1+AT*.1*sw;
+      if((Math.sin(sa)>=0?'front':'back')!==phase)return;
+      const sd=r+8+i*5, sx=Math.round(x+Math.cos(sa)*sd), sy=Math.round(y+Math.sin(sa)*sd*K);
       const shot=HOVER===s||SEL===s;
-      if(s.type==='station'){box(sx-1,sy-1,3,3,shot?'#e9b34e':'#5ad6d6')}else{drawPlanet(sx,sy,2,s)}
-      if(shot)text(sx,sy+5,s.name.toUpperCase(),'#e9b34e','center');
-      ITEMS.push({x:sx,y:sy,r:4,node:s});});
+      if(SPRTYPES[s.type])drawSprite(sx,sy,lookFor(s),s.type==='ship'?sa+(sw<0?-1:1)*Math.PI/2:0);
+      else drawPlanet(sx,sy,2,s);
+      if(shot){box(sx-7,sy-7,14,14,'#e9b34e');text(sx,sy+8,s.name.toUpperCase(),'#e9b34e','center')}
+      ITEMS.push({x:sx,y:sy,r:6,node:s});});
+  };
+  const drawBody=e=>{
+    const {b,ang,ro,x,y,spin}=e; const hot=HOVER===b||SEL===b;
+    posOf[b.name.toLowerCase()]=[x,y];
+    if(b.type==='belt'){const R=rng(hash(b.name));for(let i=0;i<160;i++){const t=R()*6.2832,d=ro+(R()-.5)*gap*.35;px(cx+Math.cos(t)*d,cy+Math.sin(t)*d*K,R()>.5?'#6a6a72':'#3a3a44')}
+      text(x,y-10,b.name.toUpperCase(),hot?'#e9b34e':'#5e6a94','center');ITEMS.push({x,y,r:8,node:b});return}
+    if(SPRTYPES[b.type]){
+      const lk=lookFor(b);
+      drawSats(b,x,y,6,ang,'back');
+      drawSprite(x,y,lk,b.type==='ship'?Math.atan2(Math.cos(ang)*K,-Math.sin(ang))+(spin<0?0:Math.PI):(lk==='spin'?AT*.12:0));
+      drawSats(b,x,y,6,ang,'front');
+      if(hot)box(x-8,y-8,16,16,'#e9b34e');
+      text(x,y+9,b.name.toUpperCase(),hot?'#e9b34e':'#c6cde3','center');
+      ITEMS.push({x,y,r:8,node:b}); return}
+    const size=b.meta.size?+b.meta.size:null;
+    let r=Math.max(4,Math.round(size||(b.type==='planet'?(4+(hash(b.name+'r')%5)):3)));
+    if(TILT)r=Math.max(3,Math.round(r*(1+.22*Math.sin(ang))));
+    drawSats(b,x,y,r,ang,'back');
+    drawPlanet(x,y,r,b);
+    drawSats(b,x,y,r,ang,'front');
     if(hot)box(x-r-3,y-r-3,r*2+6,r*2+6,'#e9b34e');
     text(x,y+r+4,b.name.toUpperCase(),hot?'#e9b34e':'#c6cde3','center');
     ITEMS.push({x,y,r:r+3,node:b});
+  };
+  const ents=bodies.map(b=>{
+    const spin=(0.85+((hash(b.name+'j')%31)/100))*((hash(b.name+'d')%25)?1:-1);
+    const ro=sr+b.orbit*gap, ang=(hash(b.name)%360)/180*Math.PI+AT*6.2832*spin/(90*Math.pow(b.orbit,1.4));
+    const d=b.type==='belt'?-2:Math.sin(ang);
+    return {b,ro,ang,d,spin,x:Math.round(cx+Math.cos(ang)*ro),y:Math.round(cy+Math.sin(ang)*ro*K)};
+  }).sort((p,q)=>p.d-q.d);
+  ents.filter(e=>e.d<0).forEach(drawBody);
+  drawStar(cx,cy,sr,STAR[sys.meta.star]||'#e0e4ff');
+  ITEMS.push({x:cx,y:cy,r:sr+2,node:sys});
+  ents.filter(e=>e.d>=0).forEach(drawBody);
+  // ships in transit between two named bodies (or the star, by system name)
+  descendants(sys).filter(c=>c.meta.between).forEach(c=>{
+    const p=c.meta.between.split(',').map(t=>t.trim().toLowerCase());
+    const A=posOf[p[0]], B=posOf[p[1]]; if(!A||!B)return;
+    const f=Math.max(.08,Math.min(.92,c.meta.at?+c.meta.at/100:.3+(hash(c.name)%41)/100));
+    const x=Math.round(A[0]+(B[0]-A[0])*f), y=Math.round(A[1]+(B[1]-A[1])*f);
+    drawRoute(A[0],A[1],B[0],B[1],'#181e38');
+    const hot=HOVER===c||SEL===c;
+    drawSprite(x,y,lookFor(c),Math.atan2(B[1]-A[1],B[0]-A[0]));
+    if(hot)box(x-8,y-8,16,16,'#e9b34e');
+    text(x,y+9,c.name.toUpperCase(),hot?'#e9b34e':'#8fa0c4','center');
+    ITEMS.push({x,y,r:8,node:c});
   });
   text(W/2,4,sys.name.toUpperCase(),'#5e6a94','center');
 }
@@ -547,7 +793,7 @@ function renderCrumbs(){
   const chain=[];let n=VIEW.node;while(n&&n.depth>0){chain.unshift(n);n=n.parent}
   const add=(label,node)=>{const a=document.createElement('a');a.textContent=label;a.onclick=()=>goto(node);c.appendChild(a)};
   add('Galaxy',null);
-  chain.forEach(n=>{const s=document.createElement('span');s.className='sep';s.textContent='/';c.appendChild(s);add(n.name,n)});
+  chain.forEach(n=>{const s=document.createElement('span');s.className='sep';s.textContent='>';c.appendChild(s);add(n.name,n)});
 }
 function hit(ev){const r=cv.getBoundingClientRect();const x=(ev.clientX-r.left)/S,y=(ev.clientY-r.top)/S;
   let best=null,bd=1e9;for(const it of ITEMS){const d=Math.hypot(it.x-x,it.y-y);if(d<=it.r&&d<bd){bd=d;best=it.node}}return best}
@@ -558,7 +804,54 @@ cv.addEventListener('click',e=>{const h=hit(e);if(!h)return;
 cv.addEventListener('dblclick',e=>{const h=hit(e);if(h&&(h.type==='sector'||h.type==='system'))goto(h)});
 cv.addEventListener('contextmenu',e=>{e.preventDefault();up()});
 function up(){if(VIEW.level==='system')goto(VIEW.node.parent);else if(VIEW.level==='sector')goto(null)}
-document.addEventListener('keydown',e=>{if(e.target===src)return;if(e.key==='Escape'||e.key==='Backspace')up()});
+/* ---------- quick search ---------- */
+const qEl=document.getElementById('q'), sres=document.getElementById('sresults');
+let sitems=[], sact=0;
+function doSearch(){
+  const v=qEl.value.trim().toLowerCase();
+  if(!v){sres.classList.remove('open');sres.innerHTML='';return}
+  const idx=[];
+  descendants(ROOT).forEach(d=>{
+    idx.push({label:d.name,kind:d.type,cls:'n',id:d.id,where:d.parent&&d.parent.depth>0?d.parent.name:''});
+    d.people.forEach(x=>idx.push({label:x.name,kind:'person',cls:'who',id:d.id,where:d.name}));
+    d.objects.forEach(x=>idx.push({label:x.name,kind:'thing',cls:'what',id:d.id,where:d.name}));
+  });
+  sitems=idx.filter(i=>i.label.toLowerCase().includes(v)).slice(0,12); sact=0;
+  sres.innerHTML=sitems.length
+    ? sitems.map((i,n)=>'<div class="sr'+(n===0?' act':'')+'" data-n="'+n+'"><span class="'+i.cls+'">'+esc(i.label)+'</span><span class="k">'+esc(i.kind)+(i.where?' \u00b7 '+esc(i.where):'')+'</span></div>').join('')
+    : '<div class="sr"><span class="k">no matches</span></div>';
+  sres.classList.add('open');
+  sres.querySelectorAll('.sr[data-n]').forEach(el=>el.onclick=()=>pickResult(+el.dataset.n));
+}
+function pickResult(n){
+  const it=sitems[n]; if(!it)return;
+  const node=findId(ROOT,it.id); if(!node)return;
+  qEl.value=''; sres.classList.remove('open'); qEl.blur();
+  if(node.type==='sector'||node.type==='system')goto(node);
+  else{let p=node;while(p&&p.type!=='system')p=p.parent;if(p){VIEW={level:'system',node:p}}
+    select(node); renderCrumbs(); kickAnim();}
+}
+qEl.addEventListener('input',doSearch);
+qEl.addEventListener('keydown',e=>{
+  if(e.key==='Escape'){qEl.value='';sres.classList.remove('open');qEl.blur()}
+  else if(e.key==='ArrowDown'||e.key==='ArrowUp'){e.preventDefault();
+    if(sitems.length){sact=(sact+(e.key==='ArrowDown'?1:sitems.length-1))%sitems.length;
+      sres.querySelectorAll('.sr[data-n]').forEach((el,i)=>el.classList.toggle('act',i===sact))}}
+  else if(e.key==='Enter')pickResult(sact);
+  e.stopPropagation();
+});
+document.addEventListener('click',e=>{if(!document.getElementById('search').contains(e.target))sres.classList.remove('open')});
+
+document.addEventListener('keydown',e=>{if(e.target===src||e.target===qEl)return;
+  if(e.key==='Escape'||e.key==='Backspace'){up();return}
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='/'){e.preventDefault();qEl.focus()}
+  else if(k==='o')document.getElementById('bOpen').click();
+  else if(k==='v')document.getElementById('bTilt').click();
+  else if(k==='b')document.getElementById('bAnim').click();
+  else if(k==='c')document.getElementById('bCopy').click();
+});
 window.addEventListener('resize',resize);
 
 /* ---------- panel ---------- */
@@ -568,7 +861,7 @@ function md(lines){ // tiny inline markdown -> paragraphs
   return paras.map(p=>'<p>'+esc(p).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<i>$1</i>')
     .replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\n/g,' ')+'</p>').join('');
 }
-const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size']);
+const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look']);
 function renderPanel(){
   const p=document.getElementById('info');
   const n=SEL||VIEW.node;
@@ -582,7 +875,7 @@ function renderPanel(){
   for(const k in n.meta)if(!HIDDEN.has(k))rows.push([k,esc(n.meta[k])]);
   if(rows.length)h+='<table class="meta">'+rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('')+'</table>';
   h+='<div class="desc">'+md(n.desc)+'</div>';
-  if(SHOWGM)n.gm.forEach(g=>{h+='<div class="gm">'+md(g.split('\n'))+'</div>'});
+  if(WARDEN)n.gm.forEach(g=>{h+='<div class="gm">'+md(g.split('\n'))+'</div>'});
   if(n.people.length||n.objects.length){h+='<h3 class="sub">Here</h3><ul class="track">'+
     n.people.map(x=>'<li><span class="who">'+esc(x.name)+'</span> '+esc(x.note)+'</li>').join('')+
     n.objects.map(x=>'<li><span class="what">'+esc(x.name)+'</span> '+esc(x.note)+'</li>').join('')+'</ul>'}
@@ -603,17 +896,27 @@ function wireWhere(el){
 }
 function renderTrack(){
   const p=document.getElementById('track'); const all=descendants(ROOT);
-  let h='<h3 class="sub">People</h3><ul class="track">';
-  all.forEach(d=>d.people.forEach(x=>h+='<li><span class="who">'+esc(x.name)+'</span> '+esc(x.note)+'<br><span class="where" data-id="'+esc(d.id)+'">@ '+esc(d.name)+'</span></li>'));
-  h+='</ul><h3 class="sub">Things</h3><ul class="track">';
-  all.forEach(d=>d.objects.forEach(x=>h+='<li><span class="what">'+esc(x.name)+'</span> '+esc(x.note)+'<br><span class="where" data-id="'+esc(d.id)+'">@ '+esc(d.name)+'</span></li>'));
-  h+='</ul><p class="empty">Add a line like <b>- @Name — note</b> or <b>- #Thing — note</b> under any heading.</p>';
+  const whereOf=d=>{let sys=d;while(sys&&sys.type!=='system'&&sys.type!=='sector')sys=sys.parent;
+    return d.parent&&d.parent.depth>0&&d.parent!==sys?d.parent.name+' · '+(sys?sys.name:''):(sys&&sys!==d?sys.name:'')};
+  const row=(cls,name,note,id,where)=>'<li><span class="'+cls+'">'+esc(name)+'</span> '+esc(note||'')+
+    '<br><span class="where" data-id="'+esc(id)+'">@ '+esc(where)+'</span></li>';
+  let h='';
+  const sect=(title,items)=>{if(items.length)h+='<h3 class="sub">'+title+'</h3><ul class="track">'+items.join('')+'</ul>'};
+  const people=[],things=[];
+  all.forEach(d=>{d.people.forEach(x=>people.push(row('who',x.name,x.note,d.id,d.name)));
+    d.objects.forEach(x=>things.push(row('what',x.name,x.note,d.id,d.name)))});
+  sect('People',people);
+  sect('Things',things);
+  sect('Ships',all.filter(d=>d.type==='ship'||d.type==='derelict').map(d=>row('what',d.name,(d.type==='derelict'?'derelict':'')+(d.meta.between?' en route: '+d.meta.between:''),d.id,whereOf(d)||'—')));
+  sect('Stations',all.filter(d=>d.type==='station'||d.type==='relay').map(d=>row('who',d.name,d.type==='relay'?'relay':'',d.id,whereOf(d)||'—')));
+  sect('Locations',all.filter(d=>d.type==='location').map(d=>row('what',d.name,'',d.id,whereOf(d)||'—')));
+  h+='<p class="empty">Add <b>- @Name — note</b> or <b>- #Thing — note</b> under any heading to track them here.</p>';
   p.innerHTML=h; wireWhere(p);
 }
 function showPane(id){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===id));document.querySelectorAll('.pane').forEach(t=>t.classList.toggle('on',t.id===id))}
 document.querySelectorAll('.tab').forEach(t=>{t.onclick=()=>showPane(t.dataset.p);t.onkeydown=e=>{if(e.key==='Enter')showPane(t.dataset.p)}});
 function scrollEditorTo(node){
-  if(!document.getElementById('edit').classList.contains('on')||!node)return;
+  if(!WARDEN||!document.getElementById('edit').classList.contains('on')||!node)return;
   const lines=src.value.split('\n');let pos=0;for(let i=0;i<node.line;i++)pos+=lines[i].length+1;
   src.focus();src.setSelectionRange(pos,pos+lines[node.line].length);
   const lh=src.scrollHeight/lines.length;src.scrollTop=Math.max(0,node.line*lh-40);
@@ -621,29 +924,50 @@ function scrollEditorTo(node){
 
 /* ---------- editor / files ---------- */
 let tmr=null;
-src.addEventListener('input',()=>{clearTimeout(tmr);tmr=setTimeout(()=>{load(src.value);setStatus('unsaved edits')},250)});
+src.addEventListener('input',()=>{if(!WARDEN)return;clearTimeout(tmr);
+  tmr=setTimeout(()=>{load(src.value);
+    setStatus('updated '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'}))},300)});
 function setStatus(s,err){status.textContent=s;status.className=err?'err':''}
-document.getElementById('bGM').onclick=e=>{SHOWGM=!SHOWGM;e.target.classList.toggle('on',SHOWGM);renderPanel()};
-const bAnim=document.getElementById('bAnim');bAnim.classList.toggle('on',ANIM);
-bAnim.onclick=()=>{ANIM=!ANIM;bAnim.classList.toggle('on',ANIM);draw();kickAnim()};
-document.getElementById('bOpen').onclick=()=>document.getElementById('file').click();
+
+const menu=document.getElementById('menu'), bOpts=document.getElementById('bOpts');
+bOpts.onclick=e=>{e.stopPropagation();menu.classList.toggle('open')};
+document.addEventListener('click',e=>{if(!menu.contains(e.target))menu.classList.remove('open')});
+
+const bAnim=document.getElementById('bAnim');
+const animLabel=()=>bAnim.innerHTML='Or<u>b</u>its: '+(ANIM?'on':'off');
+animLabel();
+bAnim.onclick=()=>{ANIM=!ANIM;animLabel();draw();kickAnim()};
+
+const bTilt=document.getElementById('bTilt');
+const tiltLabel=()=>bTilt.innerHTML='<u>V</u>iew: '+(TILT?'tilted':'flat');
+tiltLabel();
+bTilt.onclick=()=>{TILT=!TILT;tiltLabel();draw()};
+
+document.getElementById('bOpen').onclick=()=>{menu.classList.remove('open');document.getElementById('file').click()};
 document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{load(t);setStatus(f.name)})};
-function download(name,text){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'text/markdown'}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
-document.getElementById('bSave').onclick=()=>{download('starchart.md',src.value);setStatus('saved')};
-document.getElementById('bExport').onclick=()=>{
-  const out=src.value.split(/\r?\n/).filter(l=>!/^\s*>/.test(l)).join('\n').replace(/\n{3,}/g,'\n\n');
-  download('starchart-players.md',out);setStatus('player copy saved');
+
+document.getElementById('bCopy').onclick=async()=>{
+  menu.classList.remove('open');
+  const t=src.value; // warden: full file · player: GM-stripped
+  try{await navigator.clipboard.writeText(t);setStatus('copied to clipboard')}
+  catch(e){showPane('edit');src.focus();src.select();
+    try{document.execCommand('copy');setStatus('copied to clipboard')}
+    catch(e2){setStatus('select the Edit tab text and copy manually',true)}}
 };
+
+window.addEventListener('hashchange',()=>{
+  WARDEN=/warden/i.test(location.hash);
+  syncEditor(); renderPanel();
+});
 
 /* ---------- boot ---------- */
 const q=new URLSearchParams(location.search);
 if(q.get('src')){
-  setStatus('loading…');
+  setStatus('loading\u2026');
   fetch(q.get('src')).then(r=>{if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.text()})
     .then(t=>{load(t);setStatus(q.get('src').split('/').pop())})
     .catch(e=>{load(document.getElementById('sample').textContent.trim());setStatus('could not load '+q.get('src')+' ('+e.message+') — showing sample',true)});
 }else load(document.getElementById('sample').textContent.trim());
-if(q.get('gm')==='0'){SHOWGM=false;document.getElementById('bGM').classList.remove('on');renderPanel()}
 document.fonts&&document.fonts.ready.then(draw);
 </script>
 </body>
