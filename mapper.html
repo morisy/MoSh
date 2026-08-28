@@ -98,6 +98,17 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
 #menu button{border:0;text-align:left;padding:3px 12px;color:var(--text)}
 #menu button::before,#menu button::after{content:""}
 #menu button:hover{background:var(--cyan);color:#06070f}
+.frm label{display:block;margin:7px 0 0;color:var(--dim)}
+.frm select,.frm input,.frm textarea{display:block;width:100%;background:#070910;border:1px solid var(--line);color:var(--text);font:inherit;padding:1px 5px;margin-top:1px}
+.frm select:focus,.frm input:focus,.frm textarea:focus{outline:0;border-color:var(--cyan)}
+.frm .pair{display:flex;gap:6px;align-items:center;color:var(--dim)}
+.frm .pair input{width:80px;display:inline-block}
+.frm textarea{resize:vertical}
+.f-fromto{border-left:1px dotted var(--line);padding-left:8px}
+.prow{display:flex;gap:10px;align-items:center;margin-top:10px}
+#pv{border:1px solid var(--line);image-rendering:pixelated;width:128px;height:128px;flex:none;background:#06070f}
+#aErr{color:var(--rust)}
+#aErr.ok{color:var(--cyan)}
 @media (max-width:820px){
   #app{grid-template-columns:1fr;grid-template-rows:auto 55vh 1fr}
   header{grid-column:1}
@@ -132,9 +143,64 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
       <div class="tab on" data-p="info" tabindex="0">Info</div>
       <div class="tab" data-p="track" tabindex="0">Directory</div>
       <div class="tab" data-p="edit" tabindex="0">Edit</div>
+      <div class="tab" data-p="add" tabindex="0">Add</div>
     </div>
     <div class="pane on" id="info"></div>
     <div class="pane" id="track"></div>
+    <div class="pane" id="add">
+      <h3 class="sub">New entry</h3>
+      <div class="frm">
+        <label>Type
+          <select id="aType">
+            <option value="sector">Sector</option>
+            <option value="system">System</option>
+            <option value="planet" selected>Planet</option>
+            <option value="moon">Moon</option>
+            <option value="belt">Asteroid belt</option>
+            <option value="station">Station</option>
+            <option value="ship">Ship</option>
+            <option value="derelict">Derelict</option>
+            <option value="relay">Relay</option>
+            <option value="location">Location (not drawn)</option>
+          </select></label>
+        <label>Name <input id="aName" placeholder="Tannhauser IV" autocomplete="off"></label>
+        <label class="f-parent">In <select id="aParent"></select></label>
+        <label class="f-coords">Coords (0–100) <span class="pair"><input id="aX" type="number" min="0" max="100"> , <input id="aY" type="number" min="0" max="100"></span></label>
+        <label class="f-star">Star <select id="aStar"><option>orange</option><option>red</option><option>yellow</option><option>white</option><option>blue</option></select></label>
+        <label class="f-jump">Jumps <input id="aJump" placeholder="Vega Deep (3), Ferrous Cross (1)"></label>
+        <label class="f-place">Placement
+          <select id="aPlace">
+            <option value="ring">own orbit ring</option>
+            <option value="body">orbiting a body</option>
+            <option value="transit">in transit</option>
+          </select></label>
+        <label class="f-orbit">Orbit # <input id="aOrbit" type="number" min="1" max="12" value="3"></label>
+        <label class="f-host">Around <select id="aHost"></select></label>
+        <div class="f-fromto">
+          <label>From <select id="aFrom"></select></label>
+          <label>To <select id="aTo"></select></label>
+          <label>At <span class="pair"><input id="aAt" type="number" min="0" max="100" value="40"> %</span></label>
+        </div>
+        <label class="f-color">Color <select id="aColor"></select></label>
+        <label class="f-pattern">Pattern <select id="aPattern"></select></label>
+        <label class="f-rings">Rings <select id="aRings"><option value="">no</option><option value="yes">yes</option></select></label>
+        <label class="f-size">Size <input id="aSize" type="number" min="3" max="12" placeholder="auto"></label>
+        <label class="f-look">Look <select id="aLook"></select></label>
+        <div class="f-stats">
+          <label class="s-atmo">Atmosphere <input id="aAtmo" placeholder="thin, CO2"></label>
+          <label class="s-grav">Gravity <input id="aGrav" placeholder="0.8g"></label>
+          <label class="s-clim">Climate <input id="aClim" placeholder="cold desert"></label>
+          <label class="s-surf">Surface <input id="aSurf" placeholder="iron flats"></label>
+          <label class="s-pop">Population <input id="aPop" placeholder="40,000"></label>
+          <label class="s-port">Port class <input id="aPort" placeholder="C"></label>
+          <label class="s-fac">Factions <input id="aFac" placeholder="Halcyon Mining"></label>
+        </div>
+        <label>Description <textarea id="aDesc" rows="3" placeholder="Player-facing text"></textarea></label>
+        <label>GM note <textarea id="aGM" rows="2" placeholder="Hidden from players"></textarea></label>
+        <div class="prow"><canvas id="pv" width="64" height="64"></canvas><span id="pvNote" class="empty"></span></div>
+        <p><button id="aInsert">Insert entry</button> <span id="aErr"></span></p>
+      </div>
+    </div>
     <div class="pane" id="edit">
       <textarea id="src" spellcheck="false"></textarea>
       <div class="editbar"><span>Edits redraw the map as you type. Click a body on the map to jump to it here.</span></div>
@@ -457,6 +523,7 @@ let ANIM=!matchMedia('(prefers-reduced-motion: reduce)').matches, RAF=null;
 let WARDEN=/warden/i.test(location.hash), TILT=true;
 const stripGM=t=>t.split(/\r?\n/).filter(l=>!/^\s*>/.test(l)).join('\n').replace(/\n{3,}/g,'\n\n');
 const cv=document.getElementById('cv'), ctx=cv.getContext('2d');
+let CTX=ctx;
 const stage=document.getElementById('stage'), src=document.getElementById('src'), status=document.getElementById('status');
 
 function load(text){
@@ -464,18 +531,22 @@ function load(text){
   if(VIEW.node){const n=findId(ROOT,VIEW.node.id);VIEW.node=n||null;if(!n)VIEW.level='galaxy'}
   if(SEL){SEL=findId(ROOT,SEL.id)}
   resize(); renderCrumbs(); renderPanel(); renderTrack(); kickAnim();
+  if(document.getElementById('aType'))refreshForm();
 }
 function syncEditor(){
   const want=WARDEN?TEXT:stripGM(TEXT);
   if(src.value!==want)src.value=want;
   src.readOnly=!WARDEN;
+  const at=document.querySelector('.tab[data-p="add"]');
+  at.style.display=WARDEN?'':'none';
+  if(!WARDEN&&document.getElementById('add').classList.contains('on'))showPane('info');
   document.querySelector('.editbar span').textContent=WARDEN
     ?'This text is the live document — edits redraw the map. Copy it out (Options) to keep it.'
     :'Read-only player copy — GM notes are stripped. Copy freely.';
 }
 
 /* ---------- drawing primitives ---------- */
-function px(x,y,c){ctx.fillStyle=c;ctx.fillRect(Math.round(x),Math.round(y),1,1)}
+function px(x,y,c){CTX.fillStyle=c;CTX.fillRect(Math.round(x),Math.round(y),1,1)}
 function dith(x,y,v,cols){ // v 0..1 across cols with ordered dither
   const n=cols.length-1; const f=v*n; let i=Math.floor(f); const fr=f-i;
   if(i>=n)i=n-1;const th=(BAYER[(y&3)][(x&3)]+.5)/16; return cols[Math.min(n,i+(fr>th?1:0))];
@@ -619,7 +690,7 @@ function resize(){
   draw();
 }
 function draw(){
-  if(!ROOT)return;
+  if(!ROOT)return; CTX=ctx;
   ITEMS=[]; ctx.fillStyle='#06070f'; ctx.fillRect(0,0,W,H);
   ({galaxy:drawGalaxy,sector:drawSector,system:drawSystem})[VIEW.level]();
 }
@@ -967,6 +1038,136 @@ window.addEventListener('hashchange',()=>{
   WARDEN=/warden/i.test(location.hash);
   syncEditor(); renderPanel();
 });
+
+
+/* ---------- add-entry form ---------- */
+const $=id=>document.getElementById(id);
+const SPRITE_ADD={moon:1,station:1,ship:1,derelict:1,relay:1};
+function fillSel(sel,opts,keep){
+  const old=keep?sel.value:null; sel.innerHTML='';
+  opts.forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.appendChild(o)});
+  if(keep&&opts.some(o=>o[0]===old))sel.value=old;
+}
+function sysOf(n){let p=n;while(p&&p.type!=='system')p=p.parent;return p}
+function refreshForm(){
+  if(!ROOT)return;
+  const t=$('aType').value;
+  const show=(cls,on)=>document.querySelectorAll('.'+cls).forEach(el=>el.style.display=on?'':'none');
+  const all=descendants(ROOT);
+  const sectors=all.filter(n=>n.type==='sector'), systems=all.filter(n=>n.type==='system');
+  const isBody=['planet','moon','belt','station','ship','derelict','relay'];
+  show('f-parent',t!=='sector');
+  if(t==='system')fillSel($('aParent'),sectors.map(n=>[n.id,n.name]),true);
+  else if(t==='location')fillSel($('aParent'),all.filter(n=>isBody.includes(n.type)).map(n=>[n.id,n.name+' ('+(sysOf(n)?sysOf(n).name:'?')+')']),true);
+  else if(t!=='sector')fillSel($('aParent'),systems.map(n=>[n.id,n.name+' ('+(n.parent?n.parent.name:'')+')']),true);
+  show('f-coords',t==='sector'||t==='system');
+  show('f-star',t==='system'); show('f-jump',t==='system');
+  const placeable=SPRITE_ADD[t];
+  show('f-place',!!placeable);
+  const place=$('aPlace').value;
+  document.querySelector('#aPlace option[value=transit]').disabled=!(t==='ship'||t==='derelict');
+  if(placeable&&place==='transit'&&!(t==='ship'||t==='derelict'))$('aPlace').value='ring';
+  show('f-orbit',t==='planet'||t==='belt'||(placeable&&$('aPlace').value==='ring'));
+  show('f-host',placeable&&$('aPlace').value==='body');
+  show('f-fromto',placeable&&$('aPlace').value==='transit');
+  const sys=t==='sector'||t==='system'||t==='location'?null:findId(ROOT,$('aParent').value);
+  if(sys){
+    const bodies=sys.children.filter(c=>typeof c.orbit==='number'&&c.type!=='belt');
+    const hosts=descendants(sys).filter(c=>isBody.includes(c.type)&&c.type!=='belt');
+    fillSel($('aHost'),hosts.map(n=>[n.name,n.name]),true);
+    const dests=[[sys.name,sys.name+' (star)']].concat(bodies.map(n=>[n.name,n.name]))
+      .concat(sys.parent?sys.parent.children.filter(s=>s!==sys).map(s=>[s.name,s.name+' (system)']):[]);
+    fillSel($('aFrom'),dests,true); fillSel($('aTo'),dests,true);
+  }
+  show('f-color',t==='planet'||t==='moon'); show('f-pattern',t==='planet'||t==='moon');
+  show('f-rings',t==='planet'); show('f-size',t==='planet');
+  show('f-look',t==='station'||t==='ship');
+  if(t==='station')fillSel($('aLook'),[['','auto'],['ring','ring'],['spin','spin'],['spar','spar']],true);
+  if(t==='ship')fillSel($('aLook'),[['','auto'],['freighter','freighter'],['shuttle','shuttle'],['gunship','gunship']],true);
+  show('f-stats',isBody.includes(t)&&t!=='belt'&&t!=='relay');
+  const st=c=>show(c,t==='planet'||t==='moon');
+  st('s-atmo');st('s-grav');st('s-clim');st('s-surf');
+  show('s-pop',t!=='ship'&&t!=='derelict'&&t!=='relay'&&isBody.includes(t)&&t!=='belt');
+  show('s-port',t==='planet'||t==='moon'||t==='station');
+  renderPreview();
+}
+function fillOnce(){
+  fillSel($('aColor'),[['','auto']].concat(PALNAMES.map(c=>[c,c])));
+  fillSel($('aPattern'),[['','auto']].concat(PATTERNS.map(p=>[p,p])));
+  $('aX').value=10+Math.floor(Math.random()*80); $('aY').value=10+Math.floor(Math.random()*80);
+}
+function renderPreview(){
+  const pcv=$('pv'), pc=pcv.getContext('2d');
+  pc.fillStyle='#06070f'; pc.fillRect(0,0,64,64);
+  const t=$('aType').value, nm=$('aName').value.trim()||'Preview';
+  const fake={name:nm,type:t,meta:{color:$('aColor').value,pattern:$('aPattern').value,rings:$('aRings').value,look:$('aLook').value}};
+  CTX=pc; let note='';
+  if(t==='planet'||t==='moon'){
+    const r=+($('aSize').value)|| (t==='moon'?6:11);
+    drawPlanet(32,32,t==='planet'?Math.min(14,r+3):r,fake);
+    if(!$('aColor').value||!$('aPattern').value)note='auto look is hashed from the name \u2014 rename to reroll';
+  }
+  else if(SPRITE_ADD[t]&&t!=='moon'){drawSprite(32,32,lookFor(fake),0);if(t!=='derelict'&&t!=='relay'&&!$('aLook').value)note='auto sprite is hashed from the name'}
+  else if(t==='system'){drawStar(32,32,8,STAR[$('aStar').value]||'#e0e4ff')}
+  else if(t==='sector'){CTX.strokeStyle='#26305a';CTX.strokeRect(16.5,16.5,31,31);px(28,30,'#e0e4ff');px(36,26,'#f2a23c');px(33,38,'#e0553a')}
+  else if(t==='belt'){for(let i=0;i<70;i++){const a=Math.random()*6.28,d=22+Math.random()*6;px(32+Math.cos(a)*d,32+Math.sin(a)*d,Math.random()>.5?'#6a6a72':'#3a3a44')}note='scattered along its orbit ring'}
+  else note='locations are listed, not drawn';
+  CTX=ctx; $('pvNote').textContent=note;
+}
+function addEntry(){
+  const t=$('aType').value, nm=$('aName').value.trim();
+  const err=(m,ok)=>{const e=$('aErr');e.textContent=m;e.className=ok?'ok':''};
+  if(!nm)return err('name required');
+  let parent=t==='sector'?ROOT:findId(ROOT,$('aParent').value);
+  if(!parent)return err('pick a parent');
+  if(descendants(ROOT).some(n=>n.name.toLowerCase()===nm.toLowerCase()))return err('that name already exists \u2014 names must be unique');
+  const meta=[];
+  if(t==='sector'||t==='system')meta.push('coords: '+(+$('aX').value||50)+', '+(+$('aY').value||50));
+  if(t==='system'){meta.push('star: '+$('aStar').value);if($('aJump').value.trim())meta.push('jump: '+$('aJump').value.trim())}
+  if(t!=='sector'&&t!=='system'&&t!=='location')meta.push('type: '+t);
+  if(t==='planet'||t==='belt')meta.push('orbit: '+(+$('aOrbit').value||1));
+  if(SPRITE_ADD[t]){
+    const p=$('aPlace').value;
+    if(p==='ring')meta.push('orbit: '+(+$('aOrbit').value||1));
+    else if(p==='body'){const host=$('aHost').value;if(!host)return err('pick a body to orbit');
+      const hn=descendants(parent).find(n=>n.name===host);if(hn){parent=hn}meta.push('orbit: '+host)}
+    else {if($('aFrom').value===$('aTo').value)return err('from and to must differ');
+      meta.push('between: '+$('aFrom').value+', '+$('aTo').value);meta.push('at: '+(+$('aAt').value||40))}
+  }
+  if(t==='location')meta.push('type: location');
+  const mv=(id,k)=>{const v=$(id).value.trim();if(v)meta.push(k+': '+v)};
+  if(t==='planet'||t==='moon'){mv('aColor','color');mv('aPattern','pattern');if($('aRings').value&&t==='planet')meta.push('rings: yes');mv('aSize','size');
+    mv('aAtmo','atmosphere');mv('aGrav','gravity');mv('aClim','climate');mv('aSurf','surface')}
+  if(t==='station'||t==='ship')mv('aLook','look');
+  if(t!=='ship'&&t!=='derelict'&&t!=='relay'&&t!=='belt'&&t!=='sector'&&t!=='system')mv('aPop','population');
+  if(t==='planet'||t==='moon'||t==='station')mv('aPort','port');
+  mv('aFac','factions');
+  const depth=Math.min(6,(parent===ROOT?0:parent.depth)+1);
+  const head='#'.repeat(depth)+' '+(t==='sector'?'Sector: ':t==='system'?'System: ':'')+nm;
+  const block=[head,...meta];
+  const desc=$('aDesc').value.trim(), gm=$('aGM').value.trim();
+  if(desc){block.push('');block.push(...desc.split('\n'))}
+  if(gm){block.push('');gm.split('\n').forEach((l,i)=>block.push('> '+(i===0?'GM: ':'')+l))}
+  // insertion point: end of parent subtree
+  const flat=descendants(ROOT), lines=TEXT.split('\n');
+  let at=lines.length;
+  if(parent!==ROOT){
+    const i0=flat.indexOf(parent);
+    for(let i=i0+1;i<flat.length;i++)if(flat[i].depth<=parent.depth){at=flat[i].line;break}
+  }
+  while(at>0&&lines[at-1].trim()==='')at--;
+  lines.splice(at,0,'',...block);
+  load(lines.join('\n'));
+  err('added '+nm,true);
+  const node=findId(ROOT,(parent===ROOT?'':parent.id+'/')+nm);
+  $('aName').value='';$('aDesc').value='';$('aGM').value='';
+  if(node)goto(node);
+}
+fillOnce(); 
+['aType','aParent','aPlace'].forEach(id=>$(id).addEventListener('change',refreshForm));
+['aName','aColor','aPattern','aRings','aSize','aLook','aStar'].forEach(id=>{$(id).addEventListener('input',renderPreview);$(id).addEventListener('change',renderPreview)});
+$('aInsert').onclick=addEntry;
+document.querySelectorAll('#add input,#add select').forEach(el=>el.addEventListener('keydown',e=>e.stopPropagation()));
 
 /* ---------- boot ---------- */
 const q=new URLSearchParams(location.search);
