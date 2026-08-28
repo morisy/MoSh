@@ -363,6 +363,14 @@ factions: The Company, Cassian Free Council
 </script>
 
 <script>
+/* ================= CONFIG =================
+   Default markdown file to load. Relative to
+   this page ('galaxy.md') or a full URL.
+   Set to '' to use the built-in sample.
+   A ?src=... in the URL overrides this.     */
+const DEFAULT_SRC='galaxy.md';
+/* ========================================== */
+
 /* ---------- palette ---------- */
 const PAL = {
   rust:['#5a1c10','#b8472a','#e8875a'], ochre:['#5c3d10','#b88328','#ecc768'],
@@ -962,12 +970,14 @@ window.addEventListener('hashchange',()=>{
 
 /* ---------- boot ---------- */
 const q=new URLSearchParams(location.search);
-if(q.get('src')){
+const SRC=q.get('src')||DEFAULT_SRC;
+const bootSample=msg=>{load(document.getElementById('sample').textContent.trim());if(msg)setStatus(msg,true)};
+if(SRC){
   setStatus('loading\u2026');
-  fetch(q.get('src')).then(r=>{if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.text()})
-    .then(t=>{load(t);setStatus(q.get('src').split('/').pop())})
-    .catch(e=>{load(document.getElementById('sample').textContent.trim());setStatus('could not load '+q.get('src')+' ('+e.message+') — showing sample',true)});
-}else load(document.getElementById('sample').textContent.trim());
+  fetch(SRC).then(r=>{if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.text()})
+    .then(t=>{load(t);setStatus(SRC.split('/').pop())})
+    .catch(e=>bootSample('could not load '+SRC+' ('+e.message+') — showing sample'));
+}else bootSample();
 document.fonts&&document.fonts.ready.then(draw);
 </script>
 </body>
