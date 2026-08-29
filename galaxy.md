@@ -44,3 +44,8 @@ coords: 8, 30
 ## System: Atria
 coords: 30, 55
 star: red
+
+### Iron Lasso
+type: ship
+orbit: 3
+look: freighter
