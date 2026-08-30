@@ -38,6 +38,27 @@ coords: 49, 72
 star: yellow
 jump: Alioth (1), Merak (1)
 
+### Balonov
+type: planet
+orbit: 3
+color: slate
+pattern: spots
+atmosphere: Terraformed
+gravity: 1g
+climate: Rainy
+surface: Terrestrial
+population: 75,000,000
+port: C
+factions: Seer Microsystems
+
+Balonov was a mining colony. The primary resources have been extracted, leaving a decaying post-industrial ruin stricken with extreme poverty. Much of the population lives in the sprawling industrial ruins of the Downport City.
+
+> GM: Via Wages of Sin
+
+#### Downport City
+type: location
+factions: Seer Microsystems
+
 # Sector: Sector X
 coords: 8, 30
 
