@@ -1,7 +1,6 @@
 # Sector: Charles's Wain
 coords: 28, 70
 
-> GM: Site of Decagone.
 
 ## System: Lalande 21185
 coords: 10, 24
@@ -22,6 +21,7 @@ factions: Tannhauser-Cloudbank
 
 #### Tannhauser-Cloudbank Moroi Underwater Research Lab
 type: location
+> GM: Site of Decagone.
 
 ## System: Alioth
 coords: 19, 82
@@ -32,6 +32,15 @@ jump: Lalande 21185 (2)
 coords: 49, 92
 star: yellow
 jump: Alioth (1)
+
+### Ypsilon-14
+type: moon
+orbit: 7
+color: slate
+atmosphere: None
+climate: None
+population: 20
+factions: QuantumTek Materials
 
 ## System: Megrez
 coords: 49, 72
