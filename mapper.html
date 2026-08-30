@@ -89,6 +89,8 @@ ul.kids li:hover{background:#11162c}
 ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:uppercase}
 .sw{display:inline-block;width:10px;height:10px;border:1px solid var(--line);vertical-align:middle;margin-right:4px}
 .empty{color:var(--dim)}
+.editlink{color:var(--cyan);cursor:pointer}
+.editlink:hover{background:var(--cyan);color:#06070f}
 #status{color:var(--dim);font-size:16px}
 #status.err{color:var(--rust)}
 #opts{position:relative}
@@ -133,6 +135,7 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
         <button id="bTilt"><u>V</u>iew: tilted</button>
         <button id="bAnim">Or<u>b</u>its: on</button>
         <button id="bCopy"><u>C</u>opy markdown</button>
+        <button id="bReload"><u>R</u>eload source</button>
       </div>
     </div>
     <input type="file" id="file" accept=".md,.txt,.markdown" hidden>
@@ -197,8 +200,10 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
         </div>
         <label>Description <textarea id="aDesc" rows="3" placeholder="Player-facing text"></textarea></label>
         <label>GM note <textarea id="aGM" rows="2" placeholder="Hidden from players"></textarea></label>
+        <label>People <textarea id="aPeople" rows="2" placeholder="one per line: Name — note"></textarea></label>
+        <label>Things <textarea id="aThings" rows="2" placeholder="one per line: Thing — note"></textarea></label>
         <div class="prow"><canvas id="pv" width="64" height="64"></canvas><span id="pvNote" class="empty"></span></div>
-        <p><button id="aInsert">Insert entry</button> <span id="aErr"></span></p>
+        <p><button id="aInsert">Insert entry</button> <button id="aCancel" style="display:none">Cancel edit</button> <span id="aErr"></span></p>
       </div>
     </div>
     <div class="pane" id="edit">
@@ -208,225 +213,6 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
   </aside>
 </div>
 
-<script id="sample" type="text/markdown">
-# Sector: Carcosa Reach
-coords: 28, 40
-
-Frontier sector on the far edge of the Company's shipping lanes. Three weeks from anywhere that matters.
-
-> GM: The Reach is where the Company buries things. Every system here has a
-> reason nobody talks about it back in the core.
-
-## System: Tannhauser
-coords: 30, 55
-star: orange
-jump: Vega Deep (3), Ferrous Cross (1)
-
-A tired orange star with one habitable world and a lot of rock.
-
-- @Marshal Okonkwo — runs the system from Ferrous Station, tired, honest
-- #The Ledger — Halcyon's real shipping manifest, someone on IV has it
-
-### Tannhauser IV
-type: planet
-orbit: 3
-color: rust
-pattern: bands
-rings: yes
-atmosphere: thin, CO2, breathable with filter
-gravity: 0.8g
-climate: cold desert, dust storms
-surface: iron flats, canyon systems
-population: 40,000
-port: C
-factions: Halcyon Mining, Colonial Marshals
-
-The only reason anyone comes to Tannhauser. Halcyon runs open-pit iron
-extraction on the northern flats. Everyone else lives in the canyons.
-
-> GM: The canyons were not formed by water. Halcyon's geologists know this
-> and were paid to stop asking.
-
-- @Captain Ines Marr — Halcyon site boss, owes the crew a favor
-- @The Warden — marshal AI, increasingly erratic
-- #Core sample 7 — the thing everyone wants
-
-#### Ferrous Station
-type: station
-orbit: Tannhauser IV
-population: 1,200
-port: B
-factions: Colonial Marshals
-
-Transfer station in low orbit. Fuel, repairs, a bar that closes at 0200.
-
-##### Hab Block C
-type: location
-
-Where the marshals keep people they haven't decided about yet.
-
-#### Tannhauser IV-a
-type: moon
-orbit: Tannhauser IV
-color: bone
-pattern: craters
-
-Dead rock. Halcyon's comms relay sits on the far side.
-
-#### Halcyon relay
-type: relay
-orbit: Tannhauser IV
-
-Uncrewed comms platform. Squawks every ninety seconds.
-
-### Iron Maru
-type: ship
-look: freighter
-between: Tannhauser IV, Tannhauser VII
-at: 35
-factions: Halcyon Mining
-
-Drone fuel tanker on the long haul out to the gas giant.
-
-### The Corvid
-type: ship
-look: gunship
-between: Tannhauser, Vega Deep
-at: 55
-factions: Colonial Marshals
-
-Marshal patrol cutter, outbound. Shows on the sector chart.
-
-### Tannhauser II
-type: planet
-orbit: 1
-color: ochre
-pattern: solid
-atmosphere: none
-gravity: 0.3g
-climate: scorched
-surface: glass plains
-
-Too close to the star. Nobody goes here.
-
-### Tannhauser VII
-type: planet
-orbit: 6
-color: slate
-pattern: swirl
-rings: yes
-atmosphere: hydrogen, crushing
-gravity: 2.4g
-climate: storm giant
-population: 0
-
-Gas giant. Halcyon skims fuel from the upper atmosphere with drone tankers.
-
-> GM: One of the drone tankers went silent eleven days ago. Its last telemetry
-> showed it descending, not ascending.
-
-#### KT-9
-type: derelict
-orbit: Tannhauser VII
-
-The silent drone. Still in orbit, still not answering.
-
-> GM: It is not empty.
-
-### Belt Kessler
-type: belt
-orbit: 4
-
-Thin asteroid belt. Salvage claims, mostly abandoned.
-
-## System: Ferrous Cross
-coords: 62, 38
-star: red
-jump: Tannhauser (1), Vega Deep (2)
-
-Red dwarf with a single tidally locked world.
-
-### Anvil
-type: planet
-orbit: 2
-color: blood
-pattern: spots
-atmosphere: thick, toxic
-gravity: 1.1g
-climate: one side burns, one side freezes
-surface: twilight band settlements
-population: 8,000
-port: D
-factions: Independent Miners Union
-
-Settlers live in the terminator band and don't trust Company ships.
-
-- @Aunt Vesh — union boss, sells information, never for money
-
-## System: Vega Deep
-coords: 45, 15
-star: blue
-jump: Tannhauser (3), Ferrous Cross (2)
-
-Blue-white giant. Radiation hazard beyond orbit 5. Research outpost only.
-
-### Deep Station
-type: station
-orbit: 7
-population: 60
-port: X
-factions: Company Science Division
-
-> GM: Deep Station is studying the thing that carved the Tannhauser canyons.
-> They think it's dormant. It isn't.
-
-# Sector: Halcyon Verge
-coords: 62, 58
-
-Company core-ward sector. Well patrolled, expensive, dull.
-
-## System: Meridian
-coords: 50, 50
-star: yellow
-jump: Cassian (2)
-
-Company regional hub.
-
-### Meridian Prime
-type: planet
-orbit: 3
-color: jade
-pattern: ocean
-atmosphere: standard
-gravity: 1.0g
-climate: temperate
-surface: oceans, archipelagos
-population: 12,000,000
-port: A
-factions: The Company
-
-### Meridian Prime Highport
-type: station
-orbit: Meridian Prime
-port: A
-
-## System: Cassian
-coords: 22, 70
-star: white
-jump: Meridian (2)
-
-### Cassian III
-type: planet
-orbit: 2
-color: ice
-pattern: icecaps
-atmosphere: thin
-gravity: 0.7g
-climate: arctic
-population: 300,000
-port: B
-factions: The Company, Cassian Free Council
-</script>
 
 <script>
 /* ================= CONFIG =================
@@ -532,6 +318,7 @@ function load(text){
   if(SEL){SEL=findId(ROOT,SEL.id)}
   resize(); renderCrumbs(); renderPanel(); renderTrack(); kickAnim();
   if(document.getElementById('aType'))refreshForm();
+  if(typeof lsPut==='function')lsPut();
 }
 function syncEditor(){
   const want=WARDEN?TEXT:stripGM(TEXT);
@@ -539,7 +326,8 @@ function syncEditor(){
   src.readOnly=!WARDEN;
   const at=document.querySelector('.tab[data-p="add"]');
   at.style.display=WARDEN?'':'none';
-  if(!WARDEN&&document.getElementById('add').classList.contains('on'))showPane('info');
+  document.querySelector('.tab[data-p="edit"]').style.display=WARDEN?'':'none';
+  if(!WARDEN&&(document.getElementById('add').classList.contains('on')||document.getElementById('edit').classList.contains('on')))showPane('info');
   document.querySelector('.editbar span').textContent=WARDEN
     ?'This text is the live document — edits redraw the map. Copy it out (Options) to keep it.'
     :'Read-only player copy — GM notes are stripped. Copy freely.';
@@ -658,11 +446,11 @@ function lookFor(n){
   if(n.type==='station')return ['ring','spin','spar'][s%3];
   return SPR[n.type]?n.type:'shuttle';
 }
-function drawSprite(cx,cy,key,ang=0){
+function drawSprite(cx,cy,key,ang=0,s=1){
   const g=SPR[key], gh=g.length, gw=g[0].length;
-  const R=Math.ceil(Math.hypot(gw,gh)/2), ca=Math.cos(ang), sa=Math.sin(ang);
+  const R=Math.ceil(Math.hypot(gw,gh)/2*s), ca=Math.cos(ang), sa=Math.sin(ang);
   for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
-    const sx=Math.round(dx*ca+dy*sa+gw/2-.5), sy=Math.round(-dx*sa+dy*ca+gh/2-.5);
+    const sx=Math.round((dx*ca+dy*sa)/s+gw/2-.5), sy=Math.round((-dx*sa+dy*ca)/s+gh/2-.5);
     if(sx<0||sy<0||sx>=gw||sy>=gh)continue;
     const ch=g[sy][sx]; if(ch==='.')continue;
     px(cx+dx,cy+dy,SPRC[ch]);
@@ -710,7 +498,7 @@ function drawGalaxy(){
     text(x,y+24,sec.name.toUpperCase(),hot?'#e9b34e':'#8892b8','center');
     ITEMS.push({x,y,r:22,node:sec});
   });
-  if(!ROOT.children.length)text(W/2,H/2,'NO SECTORS. OPEN A FILE OR EDIT.',"#5e6a94",'center');
+  if(!ROOT.children.length)text(W/2,H/2,WARDEN?'EMPTY GALAXY \u2014 USE ADD OR OPEN A FILE':'EMPTY GALAXY',"#5e6a94",'center');
 }
 function drawSector(){
   const sec=VIEW.node; starfield(hash(sec.name),.005);
@@ -864,7 +652,8 @@ function goto(node){
   else if(node.type==='sector'){VIEW={level:'sector',node}}
   else if(node.type==='system'){VIEW={level:'system',node}}
   else {let p=node;while(p&&p.type!=='system')p=p.parent;if(p)VIEW={level:'system',node:p}}
-  SEL=node&&node.depth>0?node:null; draw(); renderCrumbs(); renderPanel(); showPane('info'); kickAnim();
+  SEL=node&&node.depth>0?node:null; HOVER=null; document.getElementById('hint').textContent='';
+  draw(); renderCrumbs(); renderPanel(); renderTrack(); showPane('info'); kickAnim();
 }
 function select(node){SEL=node;draw();renderPanel();scrollEditorTo(node)}
 function renderCrumbs(){
@@ -921,7 +710,9 @@ qEl.addEventListener('keydown',e=>{
 });
 document.addEventListener('click',e=>{if(!document.getElementById('search').contains(e.target))sres.classList.remove('open')});
 
-document.addEventListener('keydown',e=>{if(e.target===src||e.target===qEl)return;
+document.addEventListener('keydown',e=>{
+  const tag=e.target.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT'||e.target.isContentEditable)return;
   if(e.key==='Escape'||e.key==='Backspace'){up();return}
   if(e.metaKey||e.ctrlKey||e.altKey)return;
   const k=e.key.toLowerCase();
@@ -930,6 +721,7 @@ document.addEventListener('keydown',e=>{if(e.target===src||e.target===qEl)return
   else if(k==='v')document.getElementById('bTilt').click();
   else if(k==='b')document.getElementById('bAnim').click();
   else if(k==='c')document.getElementById('bCopy').click();
+  else if(k==='r')document.getElementById('bReload').click();
 });
 window.addEventListener('resize',resize);
 
@@ -945,7 +737,7 @@ function renderPanel(){
   const p=document.getElementById('info');
   const n=SEL||VIEW.node;
   if(!n){p.innerHTML='<h2 class="name">Galaxy</h2><div class="kind">'+ROOT.children.length+' sectors</div>'+kids(ROOT);return}
-  let h='<h2 class="name">'+esc(n.name)+'</h2><div class="kind">'+esc(n.type)+(n.parent&&n.parent.depth>0?' · '+esc(n.parent.name):'')+'</div>';
+  let h='<h2 class="name">'+esc(n.name)+'</h2><div class="kind">'+esc(n.type)+(n.parent&&n.parent.depth>0?' · '+esc(n.parent.name):'')+(WARDEN&&n.depth>0?' · <a class="editlink" data-eid="'+esc(n.id)+'">[edit]</a>':'')+'</div>';
   const rows=[];
   if(n.meta.star)rows.push(['star',n.meta.star]);
   if(n.meta.jump)rows.push(['jumps',n.meta.jump]);
@@ -967,6 +759,8 @@ function renderPanel(){
   }
   if(n.children.length)h+='<h3 class="sub">Contains</h3>'+kids(n);
   p.innerHTML=h; wireWhere(p);
+  const el=p.querySelector('.editlink');
+  if(el)el.onclick=()=>startEdit(findId(ROOT,el.dataset.eid));
 }
 function kids(n){return '<ul class="kids">'+n.children.map(c=>'<li data-id="'+esc(c.id)+'"><span class="t">'+esc(c.type)+'</span>'+esc(c.name)+'</li>').join('')+'</ul>'}
 function wireWhere(el){
@@ -974,12 +768,14 @@ function wireWhere(el){
     if(n.type==='sector'||n.type==='system')goto(n);else{let p=n;while(p&&p.type!=='system')p=p.parent;if(p&&VIEW.node!==p){VIEW={level:'system',node:p}}select(n)}});
 }
 function renderTrack(){
-  const p=document.getElementById('track'); const all=descendants(ROOT);
+  const p=document.getElementById('track');
+  const scope=VIEW.node||ROOT;
+  const all=(scope===ROOT?descendants(ROOT):[scope].concat(descendants(scope)));
   const whereOf=d=>{let sys=d;while(sys&&sys.type!=='system'&&sys.type!=='sector')sys=sys.parent;
     return d.parent&&d.parent.depth>0&&d.parent!==sys?d.parent.name+' · '+(sys?sys.name:''):(sys&&sys!==d?sys.name:'')};
   const row=(cls,name,note,id,where)=>'<li><span class="'+cls+'">'+esc(name)+'</span> '+esc(note||'')+
     '<br><span class="where" data-id="'+esc(id)+'">@ '+esc(where)+'</span></li>';
-  let h='';
+  let h='<p class="empty">showing: '+(scope===ROOT?'entire galaxy':esc(scope.name))+'</p>';
   const sect=(title,items)=>{if(items.length)h+='<h3 class="sub">'+title+'</h3><ul class="track">'+items.join('')+'</ul>'};
   const people=[],things=[];
   all.forEach(d=>{d.people.forEach(x=>people.push(row('who',x.name,x.note,d.id,d.name)));
@@ -992,7 +788,7 @@ function renderTrack(){
   h+='<p class="empty">Add <b>- @Name — note</b> or <b>- #Thing — note</b> under any heading to track them here.</p>';
   p.innerHTML=h; wireWhere(p);
 }
-function showPane(id){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===id));document.querySelectorAll('.pane').forEach(t=>t.classList.toggle('on',t.id===id))}
+function showPane(id){if(id==='add'&&typeof setAddContext==='function')setAddContext();document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===id));document.querySelectorAll('.pane').forEach(t=>t.classList.toggle('on',t.id===id))}
 document.querySelectorAll('.tab').forEach(t=>{t.onclick=()=>showPane(t.dataset.p);t.onkeydown=e=>{if(e.key==='Enter')showPane(t.dataset.p)}});
 function scrollEditorTo(node){
   if(!WARDEN||!document.getElementById('edit').classList.contains('on')||!node)return;
@@ -1027,11 +823,12 @@ document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)ret
 
 document.getElementById('bCopy').onclick=async()=>{
   menu.classList.remove('open');
-  const t=src.value; // warden: full file · player: GM-stripped
+  const t=WARDEN?TEXT:stripGM(TEXT);
   try{await navigator.clipboard.writeText(t);setStatus('copied to clipboard')}
-  catch(e){showPane('edit');src.focus();src.select();
+  catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
     try{document.execCommand('copy');setStatus('copied to clipboard')}
-    catch(e2){setStatus('select the Edit tab text and copy manually',true)}}
+    catch(e2){setStatus('copy failed \u2014 copy from the Edit tab',true)}
+    ta.remove()}
 };
 
 window.addEventListener('hashchange',()=>{
@@ -1040,23 +837,25 @@ window.addEventListener('hashchange',()=>{
 });
 
 
-/* ---------- add-entry form ---------- */
+/* ---------- add / edit form ---------- */
 const $=id=>document.getElementById(id);
 const SPRITE_ADD={moon:1,station:1,ship:1,derelict:1,relay:1};
+const ADD_STATS=[['aAtmo','atmosphere'],['aGrav','gravity'],['aClim','climate'],['aSurf','surface'],['aPop','population'],['aPort','port'],['aFac','factions']];
+let editTarget=null;
 function fillSel(sel,opts,keep){
   const old=keep?sel.value:null; sel.innerHTML='';
   opts.forEach(([v,l])=>{const o=document.createElement('option');o.value=v;o.textContent=l;sel.appendChild(o)});
   if(keep&&opts.some(o=>o[0]===old))sel.value=old;
 }
-function sysOf(n){let p=n;while(p&&p.type!=='system')p=p.parent;return p}
+function sysOf(n){let p=n;while(p&&p.type!=='system')p=p.parent;return p&&p.type==='system'?p:null}
 function refreshForm(){
-  if(!ROOT)return;
+  if(!ROOT||!$('aType'))return;
   const t=$('aType').value;
   const show=(cls,on)=>document.querySelectorAll('.'+cls).forEach(el=>el.style.display=on?'':'none');
   const all=descendants(ROOT);
   const sectors=all.filter(n=>n.type==='sector'), systems=all.filter(n=>n.type==='system');
   const isBody=['planet','moon','belt','station','ship','derelict','relay'];
-  show('f-parent',t!=='sector');
+  show('f-parent',t!=='sector'&&!editTarget);
   if(t==='system')fillSel($('aParent'),sectors.map(n=>[n.id,n.name]),true);
   else if(t==='location')fillSel($('aParent'),all.filter(n=>isBody.includes(n.type)).map(n=>[n.id,n.name+' ('+(sysOf(n)?sysOf(n).name:'?')+')']),true);
   else if(t!=='sector')fillSel($('aParent'),systems.map(n=>[n.id,n.name+' ('+(n.parent?n.parent.name:'')+')']),true);
@@ -1064,18 +863,17 @@ function refreshForm(){
   show('f-star',t==='system'); show('f-jump',t==='system');
   const placeable=SPRITE_ADD[t];
   show('f-place',!!placeable);
-  const place=$('aPlace').value;
   document.querySelector('#aPlace option[value=transit]').disabled=!(t==='ship'||t==='derelict');
-  if(placeable&&place==='transit'&&!(t==='ship'||t==='derelict'))$('aPlace').value='ring';
+  if(placeable&&$('aPlace').value==='transit'&&!(t==='ship'||t==='derelict'))$('aPlace').value='ring';
   show('f-orbit',t==='planet'||t==='belt'||(placeable&&$('aPlace').value==='ring'));
   show('f-host',placeable&&$('aPlace').value==='body');
   show('f-fromto',placeable&&$('aPlace').value==='transit');
   const sys=t==='sector'||t==='system'||t==='location'?null:findId(ROOT,$('aParent').value);
   if(sys){
     const bodies=sys.children.filter(c=>typeof c.orbit==='number'&&c.type!=='belt');
-    const hosts=descendants(sys).filter(c=>isBody.includes(c.type)&&c.type!=='belt');
+    const hosts=descendants(sys).filter(c=>isBody.includes(c.type)&&c.type!=='belt'&&c!==editTarget);
     fillSel($('aHost'),hosts.map(n=>[n.name,n.name]),true);
-    const dests=[[sys.name,sys.name+' (star)']].concat(bodies.map(n=>[n.name,n.name]))
+    const dests=[[sys.name,sys.name+' (star)']].concat(bodies.filter(b=>b!==editTarget).map(n=>[n.name,n.name]))
       .concat(sys.parent?sys.parent.children.filter(s=>s!==sys).map(s=>[s.name,s.name+' (system)']):[]);
     fillSel($('aFrom'),dests,true); fillSel($('aTo'),dests,true);
   }
@@ -1085,10 +883,11 @@ function refreshForm(){
   if(t==='station')fillSel($('aLook'),[['','auto'],['ring','ring'],['spin','spin'],['spar','spar']],true);
   if(t==='ship')fillSel($('aLook'),[['','auto'],['freighter','freighter'],['shuttle','shuttle'],['gunship','gunship']],true);
   show('f-stats',isBody.includes(t)&&t!=='belt'&&t!=='relay');
-  const st=c=>show(c,t==='planet'||t==='moon');
-  st('s-atmo');st('s-grav');st('s-clim');st('s-surf');
-  show('s-pop',t!=='ship'&&t!=='derelict'&&t!=='relay'&&isBody.includes(t)&&t!=='belt');
-  show('s-port',t==='planet'||t==='moon'||t==='station');
+  const pm=t==='planet'||t==='moon';
+  show('s-atmo',pm);show('s-grav',pm);show('s-clim',pm);show('s-surf',pm);
+  show('s-pop',pm||t==='station');
+  show('s-port',pm||t==='station');
+  $('aType').disabled=!!editTarget;
   renderPreview();
 }
 function fillOnce(){
@@ -1100,85 +899,173 @@ function renderPreview(){
   const pcv=$('pv'), pc=pcv.getContext('2d');
   pc.fillStyle='#06070f'; pc.fillRect(0,0,64,64);
   const t=$('aType').value, nm=$('aName').value.trim()||'Preview';
-  const fake={name:nm,type:t,meta:{color:$('aColor').value,pattern:$('aPattern').value,rings:$('aRings').value,look:$('aLook').value}};
+  const fake={name:nm,type:t,meta:{}};
+  if(t==='planet'||t==='moon'){fake.meta.color=$('aColor').value;fake.meta.pattern=$('aPattern').value;fake.meta.rings=t==='planet'?$('aRings').value:''}
+  if(t==='station'||t==='ship')fake.meta.look=$('aLook').value;
   CTX=pc; let note='';
   if(t==='planet'||t==='moon'){
-    const r=+($('aSize').value)|| (t==='moon'?6:11);
+    const r=+($('aSize').value)||(t==='moon'?6:11);
     drawPlanet(32,32,t==='planet'?Math.min(14,r+3):r,fake);
-    if(!$('aColor').value||!$('aPattern').value)note='auto look is hashed from the name \u2014 rename to reroll';
+    if(!fake.meta.color||!fake.meta.pattern)note='auto look is hashed from the name \u2014 rename to reroll';
   }
-  else if(SPRITE_ADD[t]&&t!=='moon'){drawSprite(32,32,lookFor(fake),0);if(t!=='derelict'&&t!=='relay'&&!$('aLook').value)note='auto sprite is hashed from the name'}
+  else if(SPRITE_ADD[t]){drawSprite(32,32,lookFor(fake),0,3);
+    if((t==='station'||t==='ship')&&!fake.meta.look)note='auto sprite is hashed from the name'}
   else if(t==='system'){drawStar(32,32,8,STAR[$('aStar').value]||'#e0e4ff')}
   else if(t==='sector'){CTX.strokeStyle='#26305a';CTX.strokeRect(16.5,16.5,31,31);px(28,30,'#e0e4ff');px(36,26,'#f2a23c');px(33,38,'#e0553a')}
   else if(t==='belt'){for(let i=0;i<70;i++){const a=Math.random()*6.28,d=22+Math.random()*6;px(32+Math.cos(a)*d,32+Math.sin(a)*d,Math.random()>.5?'#6a6a72':'#3a3a44')}note='scattered along its orbit ring'}
   else note='locations are listed, not drawn';
   CTX=ctx; $('pvNote').textContent=note;
 }
-function addEntry(){
-  const t=$('aType').value, nm=$('aName').value.trim();
-  const err=(m,ok)=>{const e=$('aErr');e.textContent=m;e.className=ok?'ok':''};
-  if(!nm)return err('name required');
-  let parent=t==='sector'?ROOT:findId(ROOT,$('aParent').value);
-  if(!parent)return err('pick a parent');
-  if(descendants(ROOT).some(n=>n.name.toLowerCase()===nm.toLowerCase()))return err('that name already exists \u2014 names must be unique');
+function formBlock(t,nm,depth){
   const meta=[];
   if(t==='sector'||t==='system')meta.push('coords: '+(+$('aX').value||50)+', '+(+$('aY').value||50));
   if(t==='system'){meta.push('star: '+$('aStar').value);if($('aJump').value.trim())meta.push('jump: '+$('aJump').value.trim())}
-  if(t!=='sector'&&t!=='system'&&t!=='location')meta.push('type: '+t);
+  if(t!=='sector'&&t!=='system')meta.push('type: '+t);
   if(t==='planet'||t==='belt')meta.push('orbit: '+(+$('aOrbit').value||1));
   if(SPRITE_ADD[t]){
     const p=$('aPlace').value;
     if(p==='ring')meta.push('orbit: '+(+$('aOrbit').value||1));
-    else if(p==='body'){const host=$('aHost').value;if(!host)return err('pick a body to orbit');
-      const hn=descendants(parent).find(n=>n.name===host);if(hn){parent=hn}meta.push('orbit: '+host)}
-    else {if($('aFrom').value===$('aTo').value)return err('from and to must differ');
+    else if(p==='body'){const host=$('aHost').value;if(!host)return {err:'pick a body to orbit'};meta.push('orbit: '+host)}
+    else {if($('aFrom').value===$('aTo').value)return {err:'from and to must differ'};
       meta.push('between: '+$('aFrom').value+', '+$('aTo').value);meta.push('at: '+(+$('aAt').value||40))}
   }
-  if(t==='location')meta.push('type: location');
   const mv=(id,k)=>{const v=$(id).value.trim();if(v)meta.push(k+': '+v)};
-  if(t==='planet'||t==='moon'){mv('aColor','color');mv('aPattern','pattern');if($('aRings').value&&t==='planet')meta.push('rings: yes');mv('aSize','size');
+  if(t==='planet'||t==='moon'){mv('aColor','color');mv('aPattern','pattern');if(t==='planet'&&$('aRings').value)meta.push('rings: yes');if(t==='planet')mv('aSize','size');
     mv('aAtmo','atmosphere');mv('aGrav','gravity');mv('aClim','climate');mv('aSurf','surface')}
   if(t==='station'||t==='ship')mv('aLook','look');
-  if(t!=='ship'&&t!=='derelict'&&t!=='relay'&&t!=='belt'&&t!=='sector'&&t!=='system')mv('aPop','population');
-  if(t==='planet'||t==='moon'||t==='station')mv('aPort','port');
+  if(t==='planet'||t==='moon'||t==='station'){mv('aPop','population');mv('aPort','port')}
   mv('aFac','factions');
-  const depth=Math.min(6,(parent===ROOT?0:parent.depth)+1);
   const head='#'.repeat(depth)+' '+(t==='sector'?'Sector: ':t==='system'?'System: ':'')+nm;
   const block=[head,...meta];
   const desc=$('aDesc').value.trim(), gm=$('aGM').value.trim();
   if(desc){block.push('');block.push(...desc.split('\n'))}
   if(gm){block.push('');gm.split('\n').forEach((l,i)=>block.push('> '+(i===0?'GM: ':'')+l))}
-  // insertion point: end of parent subtree
-  const flat=descendants(ROOT), lines=TEXT.split('\n');
+  const ppl=$('aPeople').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const thg=$('aThings').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  if(ppl.length||thg.length){block.push('');
+    ppl.forEach(s=>block.push('- @'+s)); thg.forEach(s=>block.push('- #'+s))}
+  return {block};
+}
+function submitForm(){
+  const t=$('aType').value, nm=$('aName').value.trim();
+  const err=(m,ok)=>{const e=$('aErr');e.textContent=m;e.className=ok?'ok':''};
+  if(!nm)return err('name required');
+  const clash=descendants(ROOT).some(n=>n!==editTarget&&n.name.toLowerCase()===nm.toLowerCase());
+  if(clash)return err('that name already exists \u2014 names must be unique');
+  const lines=TEXT.split('\n');
+  if(editTarget){
+    const r=formBlock(t,nm,editTarget.depth); if(r.err)return err(r.err);
+    const renamed=nm!==editTarget.name, hadKids=editTarget.children.length>0;
+    let end=editTarget.line+1;
+    while(end<lines.length&&!/^#{1,6}\s/.test(lines[end]))end++;
+    while(end>editTarget.line+1&&lines[end-1].trim()==='')end--;
+    lines.splice(editTarget.line,end-editTarget.line,...r.block);
+    const pid=editTarget.parent&&editTarget.parent.depth>0?editTarget.parent.id+'/':'';
+    cancelEdit(false);
+    load(lines.join('\n'));
+    err('saved'+(renamed&&hadKids?' \u2014 renamed: update children\u2019s orbit lines':''),true);
+    const node=findId(ROOT,pid+nm); if(node)goto(node);
+    return;
+  }
+  let parent=t==='sector'?ROOT:findId(ROOT,$('aParent').value);
+  if(!parent)return err('pick a parent');
+  if(SPRITE_ADD[t]&&$('aPlace').value==='body'){
+    const hn=descendants(parent).find(n=>n.name===$('aHost').value);
+    if(hn)parent=hn;
+  }
+  const depth=Math.min(6,(parent===ROOT?0:parent.depth)+1);
+  const r=formBlock(t,nm,depth); if(r.err)return err(r.err);
+  const flat=descendants(ROOT);
   let at=lines.length;
   if(parent!==ROOT){
     const i0=flat.indexOf(parent);
     for(let i=i0+1;i<flat.length;i++)if(flat[i].depth<=parent.depth){at=flat[i].line;break}
   }
   while(at>0&&lines[at-1].trim()==='')at--;
-  lines.splice(at,0,'',...block);
+  lines.splice(at,0,'',...r.block);
   load(lines.join('\n'));
   err('added '+nm,true);
   const node=findId(ROOT,(parent===ROOT?'':parent.id+'/')+nm);
-  $('aName').value='';$('aDesc').value='';$('aGM').value='';
+  $('aName').value='';$('aDesc').value='';$('aGM').value='';$('aPeople').value='';$('aThings').value='';
   if(node)goto(node);
 }
-fillOnce(); 
+function startEdit(node){
+  if(!node)return;
+  if(![...$('aType').options].some(o=>o.value===node.type))return setStatus('this type can\u2019t be edited in the form \u2014 use the Edit tab',true);
+  editTarget=node;
+  $('aType').value=node.type;
+  refreshForm();
+  const sys=sysOf(node);
+  if(node.type==='system'&&node.parent)$('aParent').value=node.parent.id;
+  else if(node.type==='location'&&node.parent)$('aParent').value=node.parent.id;
+  else if(sys)$('aParent').value=sys.id;
+  if(SPRITE_ADD[node.type]){
+    $('aPlace').value=node.meta.between?'transit':(typeof node.orbit==='string'?'body':'ring');
+  }
+  refreshForm();
+  $('aName').value=node.name;
+  if(typeof node.orbit==='number')$('aOrbit').value=node.orbit;
+  if(typeof node.orbit==='string')$('aHost').value=node.orbit;
+  if(node.meta.between){const p=node.meta.between.split(',').map(s=>s.trim());
+    $('aFrom').value=p[0]||'';$('aTo').value=p[1]||'';$('aAt').value=node.meta.at||40}
+  $('aX').value=node.x??50; $('aY').value=node.y??50;
+  $('aStar').value=node.meta.star||'orange';
+  $('aJump').value=node.meta.jump||'';
+  $('aColor').value=PAL[node.meta.color]?node.meta.color:'';
+  $('aPattern').value=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:'';
+  $('aRings').value=/^(y|yes|true|1)/i.test(node.meta.rings||'')?'yes':'';
+  $('aSize').value=node.meta.size||'';
+  $('aLook').value=SPR[node.meta.look]?node.meta.look:'';
+  ADD_STATS.forEach(([id,k])=>$(id).value=node.meta[k]||'');
+  $('aDesc').value=node.desc.join('\n').trim();
+  $('aGM').value=node.gm.join('\n');
+  $('aPeople').value=node.people.map(x=>x.name+(x.note?' \u2014 '+x.note:'')).join('\n');
+  $('aThings').value=node.objects.map(x=>x.name+(x.note?' \u2014 '+x.note:'')).join('\n');
+  $('aInsert').textContent='Save changes';
+  $('aCancel').style.display='';
+  $('aErr').textContent='';
+  showPane('add');
+  renderPreview();
+}
+function cancelEdit(reset=true){
+  editTarget=null;
+  $('aType').disabled=false;
+  $('aInsert').textContent='Insert entry';
+  $('aCancel').style.display='none';
+  if(reset){$('aName').value='';$('aDesc').value='';$('aGM').value='';$('aPeople').value='';$('aThings').value='';$('aErr').textContent='';refreshForm()}
+}
+function setAddContext(){
+  if(editTarget||$('aName').value.trim())return;
+  if(VIEW.level==='system'&&VIEW.node){$('aType').value='planet';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
+  else if(VIEW.level==='sector'&&VIEW.node){$('aType').value='system';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
+  else{$('aType').value='sector';refreshForm()}
+}
+fillOnce();
 ['aType','aParent','aPlace'].forEach(id=>$(id).addEventListener('change',refreshForm));
 ['aName','aColor','aPattern','aRings','aSize','aLook','aStar'].forEach(id=>{$(id).addEventListener('input',renderPreview);$(id).addEventListener('change',renderPreview)});
-$('aInsert').onclick=addEntry;
+$('aInsert').onclick=submitForm;
+$('aCancel').onclick=()=>cancelEdit(true);
+document.getElementById('bReload').onclick=()=>{menu.classList.remove('open');
+  if(confirm('Discard local edits and reload '+(SRC||'an empty galaxy')+'?')){lsClear();location.reload()}};
 document.querySelectorAll('#add input,#add select').forEach(el=>el.addEventListener('keydown',e=>e.stopPropagation()));
 
 /* ---------- boot ---------- */
 const q=new URLSearchParams(location.search);
 const SRC=q.get('src')||DEFAULT_SRC;
-const bootSample=msg=>{load(document.getElementById('sample').textContent.trim());if(msg)setStatus(msg,true)};
-if(SRC){
+const LSKEY='starchart.doc';
+function lsGet(){try{return JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){return null}}
+function lsPut(){if(!WARDEN)return;try{localStorage.setItem(LSKEY,JSON.stringify({text:TEXT,ts:Date.now(),src:SRC||''}))}catch(e){}}
+function lsClear(){try{localStorage.removeItem(LSKEY)}catch(e){}}
+const saved=lsGet();
+if(saved&&saved.src===(SRC||'')&&saved.text&&saved.text.trim()){
+  load(saved.text);
+  setStatus('restored local edits '+new Date(saved.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+}else if(SRC){
   setStatus('loading\u2026');
   fetch(SRC).then(r=>{if(!r.ok)throw new Error(r.status+' '+r.statusText);return r.text()})
     .then(t=>{load(t);setStatus(SRC.split('/').pop())})
-    .catch(e=>bootSample('could not load '+SRC+' ('+e.message+') — showing sample'));
-}else bootSample();
+    .catch(e=>{load('');setStatus('no '+SRC+' \u2014 empty galaxy')});
+}else{load('');setStatus('empty galaxy')}
 document.fonts&&document.fonts.ready.then(draw);
 </script>
 </body>
