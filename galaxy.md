@@ -83,6 +83,14 @@ factions: QuantumTek Materials
 
 Despite being an unlikely fate for a micro moon, Asclepius has carved out a niche as a medical center, with several medical facilities that often share shipments of key equipment and even personnel.
 
+#### Year of the Rat
+type: ship
+orbit: Balonov
+look: freighter
+factions: Independent
+
+A high-end casino that jumps from system to system, offering both hope for winning big and connecting with potential job leads, black market merchants and others that do business off the books.
+
 # Sector: Sector X
 coords: 8, 30
 
