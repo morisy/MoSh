@@ -59,6 +59,21 @@ Balonov was a mining colony. The primary resources have been extracted, leaving 
 type: location
 factions: Seer Microsystems
 
+#### Asclepius
+type: moon
+orbit: Balonov
+color: teal
+pattern: craters
+atmosphere: Thin
+gravity: .5g
+climate: Extreme Cold
+surface: Ice
+population: 300
+port: C
+factions: QuantumTek Materials
+
+Despite being an unlikely fate for a micro moon, Asclepius has carved out a niche as a medical center, with several medical facilities that often share shipments of key equipment and even personnel.
+
 # Sector: Sector X
 coords: 8, 30
 
