@@ -300,17 +300,41 @@ function profileFor(node){
   const seed=hash(node.name), R=rng(seed);
   const pname=PAL[node.meta.color]?node.meta.color:PALNAMES[seed%PALNAMES.length];
   const pat=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:(node.type==='moon'?'craters':PATTERNS[(seed>>>8)%6]);
+  const rvec=()=>{const a=R()*6.2832,u=R()*2-1,s=Math.sqrt(1-u*u);return [s*Math.cos(a),u,s*Math.sin(a)]};
+  const bestCandidate=(placed,tries,get)=>{ // blue-noise: farthest of several tries
+    let best=null,bd=-1;
+    for(let c=0;c<tries;c++){const v=rvec();
+      let mind=9;for(const q of placed){const p=get(q);const dd=1-(v[0]*p[0]+v[1]*p[1]+v[2]*p[2]);if(dd<mind)mind=dd}
+      if(mind>bd){bd=mind;best=v}}
+    return best};
+  // tectonic plates: continental/oceanic bias, mountain uplift at borders
+  const plates=[];
+  const nP=7+Math.floor(R()*6);
+  for(let i=0;i<nP;i++){
+    const v=bestCandidate(plates,8,q=>q.v);
+    const cont=i===0?true:(i===1?false:R()<.45);
+    plates.push({v,bias:(cont?.42:-.42)+(R()-.5)*.3});
+  }
   const craters=[];
-  const nC=4+Math.floor(R()*7);
-  for(let i=0;i<nC;i++){const a=R()*6.2832,u=R()*2-1,s=Math.sqrt(1-u*u);
-    craters.push([s*Math.cos(a),u,s*Math.sin(a),.14+R()*.3])}
+  const nC=14+Math.floor(R()*14);
+  for(let i=0;i<nC;i++){
+    const v=bestCandidate(craters,12,q=>q);
+    craters.push([v[0],v[1],v[2],.05+Math.pow(R(),2.2)*.22]);
+  }
+  craters.sort((p,q)=>q[3]-p[3]);
   const cols=PAL[pname];
   const P={cols,mapCols:[shade(cols[0],.45),cols[0],cols[1],cols[2],shade(cols[2],1.4)],
     pat,freq:2+R()*3,ph:R()*6.2832,tilt:(R()-.5)*.6,
-    sea:.5+(R()-.5)*.1,craters,
+    sea:.5+(R()-.5)*.1,craters,plates,
     rings:/^(y|yes|true|1)/i.test(node.meta.rings||''),
     fbm:fbmFor(node.name)};
   PROF[key]=P; return P;
+}
+function plateAt(P,x,y,z){
+  let b1=-2,b2=-2,bias=0;
+  for(const p of P.plates){const d=x*p.v[0]+y*p.v[1]+z*p.v[2];
+    if(d>b1){b2=b1;b1=d;bias=p.bias}else if(d>b2)b2=d}
+  return {bias,edge:b1-b2};   // edge -> 0 at a plate boundary
 }
 function terrainValue(P,x,y,z,detail){
   const f=P.fbm;
@@ -319,20 +343,32 @@ function terrainValue(P,x,y,z,detail){
     case 'swirl': {const lon=Math.atan2(z,x);
       return .5+.45*Math.sin(y*P.freq*1.5+lon*2+f(x,y,z,3,2)*2.6+P.ph)}
     case 'ocean': {
-      const cont=f(x,y,z,2,.9), det=f(x+7,y,z,detail?5:3,2.6);
-      const d=(.5+.38*cont+.2*det)-P.sea;
-      if(d<0)return .2-.14*Math.min(1,-d*3.2);          // solid deep sea, shallows at the coast
-      return .44+.55*Math.min(1,d*3.6)}                  // lowland -> highland -> peaks
+      const w=.32;                                       // domain warp: organic coasts
+      const wx=x+w*f(x+11,y,z,2,1.3), wy=y+w*f(x,y+11,z,2,1.3), wz=z+w*f(x,y,z+11,2,1.3);
+      const pl=plateAt(P,wx,wy,wz);
+      const ridge=Math.max(0,1-pl.edge*7)*(1-Math.abs(f(wx+5,wy,wz,detail?4:3,2.2)));
+      const e=.5+.3*pl.bias+.16*f(wx,wy,wz,2,.9)+.1*f(wx+7,wy,wz,detail?5:3,2.6)+.24*ridge;
+      const d=e-P.sea;
+      if(d<0)return .2-.14*Math.min(1,-d*3.2);           // solid deep sea, shallows at the coast
+      return .44+.55*Math.min(1,Math.pow(d*3.2,1.25))}   // flat lowlands, ridged peaks at plate borders
     case 'spots': {
-      let v=f(x,y,z,3,1.5)>.08?.74:.34;                  // large contiguous patches
-      return v+.06*f(x+9,y,z,2,5)}
-    case 'craters': {let v=.55+.12*f(x,y,z,2,1.1)+.04*f(x+5,y,z,2,5);
+      const wx=x+.4*f(x+11,y,z,2,1.2), wy=y+.4*f(x,y+11,z,2,1.2), wz=z+.4*f(x,y,z+11,2,1.2);
+      const v=f(wx,wy,wz,3,1.5)>.08?.74:.32;             // large warped patches
+      return v+.03*f(wx+9,wy,wz,2,5)}
+    case 'craters': {
+      let v=f(x,y,z,2,1.1)>.14?.28:.5;      // dark maria patches on solid highlands
+      v+=.02*f(x+5,y,z,2,4);
       for(const c of P.craters){const d=Math.acos(Math.max(-1,Math.min(1,x*c[0]+y*c[1]+z*c[2])));
-        if(d<c[3])v=d<c[3]*.62?.14:.95}
+        if(d<c[3])v=d<c[3]*.78?.06:.97}     // deep bowl, thin bright rim
       return v}
     case 'icecaps': {if(Math.abs(y)+f(x,y,z,3,2)*.22>.72)return .97;
-      return .28+.45*(.5+.5*f(x+3,y,z,detail?5:3,1.5))}
-    default: return .5+.12*f(x,y,z,2,1.4)+.05*f(x+4,y,z,detail?3:2,6);
+      const wx=x+.25*f(x+11,y,z,2,1.2), wy=y+.25*f(x,y+11,z,2,1.2), wz=z+.25*f(x,y,z+11,2,1.2);
+      const pl=plateAt(P,wx,wy,wz);
+      if(Math.max(0,1-pl.edge*7)*(1-Math.abs(f(wx+5,wy,wz,3,2.2)))>.55)return .75;   // ridge lines
+      return f(wx+3,wy,wz,detail?4:3,1.5)>.05?.5:.29}
+    default: {
+      const wx=x+.3*f(x+11,y,z,2,1.2), wy=y+.3*f(x,y+11,z,2,1.2), wz=z+.3*f(x,y,z+11,2,1.2);
+      return (f(wx,wy,wz,2,1.4)>.22?.29:.5)+.02*f(wx+4,wy,wz,2,6)}
   }
 }
 const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
