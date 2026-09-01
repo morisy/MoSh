@@ -168,6 +168,7 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
           </select></label>
         <label>Name <input id="aName" placeholder="Tannhauser IV" autocomplete="off"></label>
         <label class="f-parent">In <select id="aParent"></select></label>
+        <label class="f-site">Map position % (x , y · blank = auto) <span class="pair"><input id="aSX" type="number" min="0" max="100"> , <input id="aSY" type="number" min="0" max="100"></span></label>
         <label class="f-coords">Coords (0–100) <span class="pair"><input id="aX" type="number" min="0" max="100"> , <input id="aY" type="number" min="0" max="100"></span></label>
         <label class="f-star">Star <select id="aStar"><option>orange</option><option>red</option><option>yellow</option><option>white</option><option>blue</option></select></label>
         <label class="f-jump">Jumps <input id="aJump" placeholder="Vega Deep (3), Ferrous Cross (1)"></label>
@@ -221,6 +222,7 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
    Set to '' to use the built-in sample.
    A ?src=... in the URL overrides this.     */
 const DEFAULT_SRC='galaxy.md';
+const SPRITES_SRC='sprites.md';   // external sprite sheet; '' keeps built-ins
 /* ========================================== */
 
 /* ---------- palette ---------- */
@@ -240,12 +242,92 @@ const PATTERNS = ['bands','spots','swirl','craters','icecaps','ocean','solid'];
 /* ---------- seeded helpers ---------- */
 function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
 function rng(seed){let a=seed>>>0;return()=>{a=(a+0x6D2B79F5)>>>0;let t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
-function vnoise(seed){
-  const lat=(x,y)=>{const h=hash(seed+':'+x+':'+y);return (h&0xffff)/0xffff};
-  const sm=t=>t*t*(3-2*t);
-  return (x,y)=>{const x0=Math.floor(x),y0=Math.floor(y),fx=sm(x-x0),fy=sm(y-y0);
-    const a=lat(x0,y0),b=lat(x0+1,y0),c=lat(x0,y0+1),d=lat(x0+1,y0+1);
-    return (a*(1-fx)+b*fx)*(1-fy)+(c*(1-fx)+d*fx)*fy};
+/* 3D simplex noise (Gustavson's public-domain algorithm), seeded per planet.
+   Sampled on the unit sphere so globe and map share one seamless terrain. */
+function makeSimplex(seed){
+  const R=rng(seed); const p=new Uint8Array(256);
+  for(let i=0;i<256;i++)p[i]=i;
+  for(let i=255;i>0;i--){const j=(R()*(i+1))|0;const t=p[i];p[i]=p[j];p[j]=t}
+  const perm=new Uint8Array(512),pm12=new Uint8Array(512);
+  for(let i=0;i<512;i++){perm[i]=p[i&255];pm12[i]=perm[i]%12}
+  const G=[[1,1,0],[-1,1,0],[1,-1,0],[-1,-1,0],[1,0,1],[-1,0,1],[1,0,-1],[-1,0,-1],[0,1,1],[0,-1,1],[0,1,-1],[0,-1,-1]];
+  const F3=1/3,G3=1/6;
+  return function(xin,yin,zin){
+    const s=(xin+yin+zin)*F3;
+    const i=Math.floor(xin+s),j=Math.floor(yin+s),k=Math.floor(zin+s);
+    const t=(i+j+k)*G3;
+    const x0=xin-(i-t),y0=yin-(j-t),z0=zin-(k-t);
+    let i1,j1,k1,i2,j2,k2;
+    if(x0>=y0){if(y0>=z0){i1=1;j1=0;k1=0;i2=1;j2=1;k2=0}
+      else if(x0>=z0){i1=1;j1=0;k1=0;i2=1;j2=0;k2=1}
+      else{i1=0;j1=0;k1=1;i2=1;j2=0;k2=1}}
+    else{if(y0<z0){i1=0;j1=0;k1=1;i2=0;j2=1;k2=1}
+      else if(x0<z0){i1=0;j1=1;k1=0;i2=0;j2=1;k2=1}
+      else{i1=0;j1=1;k1=0;i2=1;j2=1;k2=0}}
+    const x1=x0-i1+G3,y1=y0-j1+G3,z1=z0-k1+G3;
+    const x2=x0-i2+2*G3,y2=y0-j2+2*G3,z2=z0-k2+2*G3;
+    const x3=x0-1+3*G3,y3=y0-1+3*G3,z3=z0-1+3*G3;
+    const ii=i&255,jj=j&255,kk=k&255;
+    let n=0,t0;
+    t0=.6-x0*x0-y0*y0-z0*z0;
+    if(t0>0){t0*=t0;const g=G[pm12[ii+perm[jj+perm[kk]]]];n+=t0*t0*(g[0]*x0+g[1]*y0+g[2]*z0)}
+    t0=.6-x1*x1-y1*y1-z1*z1;
+    if(t0>0){t0*=t0;const g=G[pm12[ii+i1+perm[jj+j1+perm[kk+k1]]]];n+=t0*t0*(g[0]*x1+g[1]*y1+g[2]*z1)}
+    t0=.6-x2*x2-y2*y2-z2*z2;
+    if(t0>0){t0*=t0;const g=G[pm12[ii+i2+perm[jj+j2+perm[kk+k2]]]];n+=t0*t0*(g[0]*x2+g[1]*y2+g[2]*z2)}
+    t0=.6-x3*x3-y3*y3-z3*z3;
+    if(t0>0){t0*=t0;const g=G[pm12[ii+1+perm[jj+1+perm[kk+1]]]];n+=t0*t0*(g[0]*x3+g[1]*y3+g[2]*z3)}
+    return 32*n;
+  };
+}
+const FBMC={};
+function fbmFor(name){
+  if(FBMC[name])return FBMC[name];
+  if(Object.keys(FBMC).length>80)for(const k in FBMC)delete FBMC[k];
+  const nz=makeSimplex(hash(name+'/nz'));
+  const fn=(x,y,z,oct=4,f0=1)=>{let a=0,amp=.55,f=f0;
+    for(let o=0;o<oct;o++){a+=amp*nz(x*f,y*f,z*f);f*=2;amp*=.5}
+    return a};
+  FBMC[name]=fn; return fn;
+}
+/* Terrain profile: one deterministic description per body, shared by
+   globe, map, and preview. Elevation drives both look and gameplay. */
+const PROF={};
+function profileFor(node){
+  const key=node.name+'|'+(node.meta.color||'')+'|'+(node.meta.pattern||'')+'|'+(node.meta.rings||'')+'|'+node.type;
+  if(PROF[key])return PROF[key];
+  if(Object.keys(PROF).length>80)for(const k in PROF)delete PROF[k];
+  const seed=hash(node.name), R=rng(seed);
+  const pname=PAL[node.meta.color]?node.meta.color:PALNAMES[seed%PALNAMES.length];
+  const pat=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:(node.type==='moon'?'craters':PATTERNS[(seed>>>8)%6]);
+  const craters=[];
+  const nC=4+Math.floor(R()*7);
+  for(let i=0;i<nC;i++){const a=R()*6.2832,u=R()*2-1,s=Math.sqrt(1-u*u);
+    craters.push([s*Math.cos(a),u,s*Math.sin(a),.14+R()*.3])}
+  const P={cols:PAL[pname],pat,freq:2+R()*3,ph:R()*6.2832,tilt:(R()-.5)*.6,
+    sea:.5+(R()-.5)*.1,craters,
+    rings:/^(y|yes|true|1)/i.test(node.meta.rings||''),
+    fbm:fbmFor(node.name)};
+  PROF[key]=P; return P;
+}
+function terrainValue(P,x,y,z,detail){
+  const f=P.fbm;
+  switch(P.pat){
+    case 'bands': return .5+.45*Math.sin(y*P.freq*2+P.ph+f(x,y,z,3,2)*1.2);
+    case 'swirl': {const lon=Math.atan2(z,x);
+      return .5+.45*Math.sin(y*P.freq*1.5+lon*2+f(x,y,z,3,2)*2.6+P.ph)}
+    case 'ocean': {const e=.5+.5*f(x,y,z,detail?6:4,1.6);
+      if(e>P.sea)return .58+.4*Math.min(1,(e-P.sea)*2.6);
+      return .1+.28*Math.max(0,Math.min(1,1-(P.sea-e)*3))}
+    case 'spots': return f(x,y,z,3,3)>.05?.85:.3;
+    case 'craters': {let v=.55+f(x,y,z,3,3)*.1;
+      for(const c of P.craters){const d=Math.acos(Math.max(-1,Math.min(1,x*c[0]+y*c[1]+z*c[2])));
+        if(d<c[3])v=d<c[3]*.62?.16:.92}
+      return v}
+    case 'icecaps': {if(Math.abs(y)+f(x,y,z,3,2)*.22>.72)return .96;
+      return .16+.55*(.5+.5*f(x+3,y,z,detail?6:4,1.8))}
+    default: return .5+.16*f(x,y,z,detail?5:3,3.5);
+  }
 }
 const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
 
@@ -314,6 +396,7 @@ const stage=document.getElementById('stage'), src=document.getElementById('src')
 
 function load(text){
   TEXT=text; syncEditor(); ROOT=parse(text);
+  if(typeof MAPCACHE!=='undefined')MAPCACHE.key=null;
   if(VIEW.node){const n=findId(ROOT,VIEW.node.id);VIEW.node=n||null;if(!n)VIEW.level='galaxy'}
   if(SEL){SEL=findId(ROOT,SEL.id)}
   resize(); renderCrumbs(); renderPanel(); renderTrack(); kickAnim();
@@ -345,18 +428,12 @@ function starfield(seed,density=0.004){
   for(let i=0;i<n;i++){const v=r();px(r()*W,r()*H,v>.9?'#8892b8':v>.6?'#3a4470':'#1e2444')}
 }
 function drawPlanet(cx,cy,r,node){
-  const seed=hash(node.name), R=rng(seed), noise=vnoise(node.name);
-  const pname=PAL[node.meta.color]?node.meta.color:PALNAMES[seed%PALNAMES.length];
-  const cols=PAL[pname];
-  const pat=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:(node.type==='moon'?'craters':PATTERNS[(seed>>>8)%6]);
-  const rings=/^(y|yes|true|1)/i.test(node.meta.rings||'');
-  const freq=2+R()*3, ph=R()*6.28, tilt=(R()-.5)*.6;
-  const craters=[];for(let i=0;i<4+R()*6;i++)craters.push([(R()*2-1)*.8,(R()*2-1)*.8,.08+R()*.22]);
-  const ringCols=[cols[0],cols[1],cols[2]];
+  const P=profileFor(node);
+  const ringCols=[P.cols[0],P.cols[1],P.cols[2]];
   const ringPass=front=>{
-    if(!rings)return;
+    if(!P.rings)return;
     for(let a=0;a<628;a++){const t=a/100;
-      const x=Math.cos(t)*r*1.75, y=Math.sin(t)*r*.28+x*tilt*.3;
+      const x=Math.cos(t)*r*1.75, y=Math.sin(t)*r*.28+x*P.tilt*.3;
       if(front?y<0:y>=0)continue;
       if(x*x/(r*r)+y*y/(r*r)<1&&front)continue;
       const band=Math.floor((Math.abs(Math.sin(t*1.1))*3))%3;
@@ -368,23 +445,15 @@ function drawPlanet(cx,cy,r,node){
   for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){
     if(x*x+y*y>rr*rr)continue;
     const nx=x/r, ny=y/r, nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-    let v=.5;
-    switch(pat){
-      case 'bands': v=.5+.45*Math.sin(ny*freq*2+ph+noise(nx*2,ny*3)*1.2);break;
-      case 'spots': v=noise(nx*3+10,ny*3+10)>.55?.9:.3;break;
-      case 'swirl': v=.5+.45*Math.sin(ny*freq*1.5+nx*2+noise(nx*3,ny*3)*3+ph);break;
-      case 'craters': v=.55;for(const c of craters){const d=Math.hypot(nx-c[0],ny-c[1]);if(d<c[2])v=d<c[2]*.7?.15:.9}break;
-      case 'icecaps': v=Math.abs(ny)+noise(nx*4,ny*4)*.25>.75?1:noise(nx*2,ny*2)*.6+.1;break;
-      case 'ocean': v=noise(nx*2.2+3,ny*2.2+3)>.52?.85:.2;break;
-      case 'solid': v=.5+noise(nx*5,ny*5)*.15;break;
-    }
+    let v=terrainValue(P,nx,ny,nz,false);
     const light=(-nx*.55-ny*.45+nz*.7);
-    v=v*.55+light*.55; v=Math.max(0,Math.min(1,v));
-    px(cx+x,cy+y,dith(cx+x,cy+y,v,cols));
+    v=Math.max(0,Math.min(1,v*.55+light*.55));
+    px(cx+x,cy+y,dith(cx+x,cy+y,v,P.cols));
   }
   ringPass(true);
-  node._cols=cols;
+  node._cols=P.cols;
 }
+
 /* ---------- sprites ---------- */
 const SPRC={o:'#323a52',h:'#707a94',l:'#b0b8cc',c:'#5ad6d6',e:'#e9b34e',r:'#c9583a'};
 const SPR={
@@ -439,12 +508,39 @@ relay:[
 "ll.h.ll"]
 };
 const SPRTYPES={station:1,ship:1,derelict:1,relay:1};
+const SPRKIND={freighter:'ship',shuttle:'ship',gunship:'ship',ring:'station',spin:'station',spar:'station',derelict:'other',relay:'other'};
+function parseSprites(text){
+  const grids={},kinds={};let name=null,kind='other',run=[],best=[];
+  const legend=/^[.ohlcer]+$/;
+  const commit=()=>{if(name&&best.length){const w=Math.max(...best.map(r=>r.length));grids[name]=best.map(r=>r.padEnd(w,'.'));kinds[name]=kind}name=null;kind='other';best=[];run=[]};
+  text.split(/\r?\n/).forEach(l=>{
+    const hm=l.match(/^#{1,6}\s+(.+)$/);
+    if(hm){commit();name=hm[1].trim().toLowerCase();return}
+    if(!name)return;
+    const tm=l.match(/^type\s*:\s*(\w+)/i);
+    if(tm){kind=tm[1].toLowerCase();return}
+    const t=l.trim();
+    if(legend.test(t)&&t.length>=3){run.push(t);if(run.length>best.length)best=run.slice()}
+    else run=[];
+  });
+  commit();
+  return {grids,kinds};
+}
+function applySprites(p){
+  if(!p||!Object.keys(p.grids).length)return false;
+  for(const k in SPR)delete SPR[k]; Object.assign(SPR,p.grids);
+  for(const k in SPRKIND)delete SPRKIND[k]; Object.assign(SPRKIND,p.kinds);
+  return true;
+}
+const shipLooks=()=>Object.keys(SPR).filter(k=>SPRKIND[k]==='ship');
+const stationLooks=()=>Object.keys(SPR).filter(k=>SPRKIND[k]==='station');
 function lookFor(n){
   if(n.meta.look&&SPR[n.meta.look])return n.meta.look;
   const s=hash(n.name+'spr');
-  if(n.type==='ship')return ['freighter','shuttle','gunship'][s%3];
-  if(n.type==='station')return ['ring','spin','spar'][s%3];
-  return SPR[n.type]?n.type:'shuttle';
+  if(n.type==='ship'){const a=shipLooks();if(a.length)return a[s%a.length]}
+  if(n.type==='station'){const a=stationLooks();if(a.length)return a[s%a.length]}
+  if(SPR[n.type])return n.type;
+  const a=shipLooks();return a[0]||Object.keys(SPR)[0];
 }
 function drawSprite(cx,cy,key,ang=0,s=1){
   const g=SPR[key], gh=g.length, gw=g[0].length;
@@ -480,7 +576,7 @@ function resize(){
 function draw(){
   if(!ROOT)return; CTX=ctx;
   ITEMS=[]; ctx.fillStyle='#06070f'; ctx.fillRect(0,0,W,H);
-  ({galaxy:drawGalaxy,sector:drawSector,system:drawSystem})[VIEW.level]();
+  ({galaxy:drawGalaxy,sector:drawSector,system:drawSystem,planet:drawPlanetMap})[VIEW.level]();
 }
 function tick(){RAF=null;if(ANIM&&VIEW.level==='system'){draw();RAF=requestAnimationFrame(tick)}}
 function kickAnim(){if(!RAF&&ANIM&&VIEW.level==='system')RAF=requestAnimationFrame(tick)}
@@ -499,6 +595,50 @@ function drawGalaxy(){
     ITEMS.push({x,y,r:22,node:sec});
   });
   if(!ROOT.children.length)text(W/2,H/2,WARDEN?'EMPTY GALAXY \u2014 USE ADD OR OPEN A FILE':'EMPTY GALAXY',"#5e6a94",'center');
+}
+let MAPCACHE={key:null,cv:null};
+function drawPlanetMap(){
+  const n=VIEW.node, P=profileFor(n);
+  const mh=Math.max(40,Math.min(H-36,Math.floor((W-24)/2))), mw=mh*2;
+  const mx=Math.round((W-mw)/2), my=Math.round((H-mh)/2)+4;
+  const key=n.id+'|'+(n.meta.color||'')+'|'+(n.meta.pattern||'')+'|'+mw+'x'+mh;
+  if(MAPCACHE.key!==key){
+    const oc=document.createElement('canvas');oc.width=mw;oc.height=mh;
+    const og=oc.getContext('2d'), old=CTX; CTX=og;
+    for(let y=0;y<mh;y++){
+      const lat=((y+.5)/mh-.5)*Math.PI, cl=Math.cos(lat), sy=Math.sin(lat);
+      for(let x=0;x<mw;x++){
+        const lon=((x+.5)/mw-.5)*6.2832;
+        const v=Math.max(0,Math.min(1,terrainValue(P,cl*Math.cos(lon),sy,cl*Math.sin(lon),true)));
+        px(x,y,dith(x,y,v,P.cols));
+      }}
+    og.fillStyle='rgba(6,7,15,.4)';
+    for(let gx=1;gx<12;gx++){const x=Math.round(gx*mw/12);for(let y=0;y<mh;y+=3)og.fillRect(x,y,1,1)}
+    for(let gy=1;gy<6;gy++){const y=Math.round(gy*mh/6);for(let x=0;x<mw;x+=3)og.fillRect(x,y,1,1)}
+    CTX=old;
+    MAPCACHE={key,cv:oc};
+  }
+  ctx.drawImage(MAPCACHE.cv,mx,my);
+  box(mx-1,my-1,mw+2,mh+2,'#26305a');
+  text(W/2,4,n.name.toUpperCase(),'#5e6a94','center');
+  if(P.pat==='bands'||P.pat==='swirl')text(W/2,H-10,'NO SOLID SURFACE \u2014 ATMOSPHERIC CHART','#39406a','center');
+  const sites=descendants(n).filter(c=>c.type==='location');
+  sites.forEach(s=>{
+    let sx,sy;
+    if(s.meta.site){const c=s.meta.site.split(/[, ]+/).map(Number);sx=c[0];sy=c[1]}
+    else{sx=hash(s.name+'sx')%100;sy=10+hash(s.name+'sy')%80}
+    const x=mx+Math.round(sx/100*mw), y=my+Math.round(sy/100*mh);
+    const hot=HOVER===s||SEL===s;
+    box(x-2,y-2,4,4,hot?'#e9b34e':'#5ad6d6'); px(x,y,hot?'#e9b34e':'#5ad6d6');
+    const nm=s.name.toUpperCase();
+    ctx.font='8px Silkscreen, monospace';
+    const w2=Math.ceil(ctx.measureText(nm).width)+4;
+    let lx=x-(w2>>1); lx=Math.max(mx,Math.min(mx+mw-w2,lx));
+    const ly=(y+5<my+mh-12)?y+5:y-14;
+    ctx.fillStyle='rgba(6,7,15,.75)';ctx.fillRect(lx,ly,w2,11);
+    text(lx+2,ly+2,nm,hot?'#e9b34e':'#c6cde3','left');
+    ITEMS.push({x,y,r:8,node:s});
+  });
 }
 function drawSector(){
   const sec=VIEW.node; starfield(hash(sec.name),.005);
@@ -651,6 +791,7 @@ function goto(node){
   if(!node||node.depth===0){VIEW={level:'galaxy',node:null}}
   else if(node.type==='sector'){VIEW={level:'sector',node}}
   else if(node.type==='system'){VIEW={level:'system',node}}
+  else if(node.type==='planet'||node.type==='moon'){VIEW={level:'planet',node}}
   else {let p=node;while(p&&p.type!=='system')p=p.parent;if(p)VIEW={level:'system',node:p}}
   SEL=node&&node.depth>0?node:null; HOVER=null; document.getElementById('hint').textContent='';
   draw(); renderCrumbs(); renderPanel(); renderTrack(); showPane('info'); kickAnim();
@@ -667,11 +808,12 @@ function hit(ev){const r=cv.getBoundingClientRect();const x=(ev.clientX-r.left)/
   let best=null,bd=1e9;for(const it of ITEMS){const d=Math.hypot(it.x-x,it.y-y);if(d<=it.r&&d<bd){bd=d;best=it.node}}return best}
 cv.addEventListener('mousemove',e=>{const h=hit(e);if(h!==HOVER){HOVER=h;draw();cv.style.cursor=h?'pointer':'crosshair';document.getElementById('hint').textContent=h?h.name+(h.meta.port?'  ·  port '+h.meta.port:''):''}});
 cv.addEventListener('mouseleave',()=>{HOVER=null;draw()});
+const ZOOMABLE={sector:1,system:1,planet:1,moon:1};
 cv.addEventListener('click',e=>{const h=hit(e);if(!h)return;
-  if(h.type==='sector'||h.type==='system'){if(SEL===h)goto(h);else select(h)} else select(h)});
-cv.addEventListener('dblclick',e=>{const h=hit(e);if(h&&(h.type==='sector'||h.type==='system'))goto(h)});
+  if(ZOOMABLE[h.type]&&VIEW.node!==h){if(SEL===h)goto(h);else select(h)} else select(h)});
+cv.addEventListener('dblclick',e=>{const h=hit(e);if(h&&ZOOMABLE[h.type]&&VIEW.node!==h)goto(h)});
 cv.addEventListener('contextmenu',e=>{e.preventDefault();up()});
-function up(){if(VIEW.level==='system')goto(VIEW.node.parent);else if(VIEW.level==='sector')goto(null)}
+function up(){if(VIEW.level==='planet')goto(VIEW.node.parent);else if(VIEW.level==='system')goto(VIEW.node.parent);else if(VIEW.level==='sector')goto(null)}
 /* ---------- quick search ---------- */
 const qEl=document.getElementById('q'), sres=document.getElementById('sresults');
 let sitems=[], sact=0;
@@ -696,8 +838,10 @@ function pickResult(n){
   const node=findId(ROOT,it.id); if(!node)return;
   qEl.value=''; sres.classList.remove('open'); qEl.blur();
   if(node.type==='sector'||node.type==='system')goto(node);
+  else if(node.type==='location'){let p=node;while(p&&p.type!=='planet'&&p.type!=='moon')p=p.parent;
+    if(p){VIEW={level:'planet',node:p}}select(node);renderCrumbs();renderTrack();}
   else{let p=node;while(p&&p.type!=='system')p=p.parent;if(p){VIEW={level:'system',node:p}}
-    select(node); renderCrumbs(); kickAnim();}
+    select(node); renderCrumbs(); renderTrack(); kickAnim();}
 }
 qEl.addEventListener('input',doSearch);
 qEl.addEventListener('keydown',e=>{
@@ -732,7 +876,7 @@ function md(lines){ // tiny inline markdown -> paragraphs
   return paras.map(p=>'<p>'+esc(p).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<i>$1</i>')
     .replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\n/g,' ')+'</p>').join('');
 }
-const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look']);
+const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look','site']);
 function renderPanel(){
   const p=document.getElementById('info');
   const n=SEL||VIEW.node;
@@ -765,7 +909,10 @@ function renderPanel(){
 function kids(n){return '<ul class="kids">'+n.children.map(c=>'<li data-id="'+esc(c.id)+'"><span class="t">'+esc(c.type)+'</span>'+esc(c.name)+'</li>').join('')+'</ul>'}
 function wireWhere(el){
   el.querySelectorAll('[data-id]').forEach(li=>li.onclick=()=>{const n=findId(ROOT,li.dataset.id);if(!n)return;
-    if(n.type==='sector'||n.type==='system')goto(n);else{let p=n;while(p&&p.type!=='system')p=p.parent;if(p&&VIEW.node!==p){VIEW={level:'system',node:p}}select(n)}});
+    if(n.type==='sector'||n.type==='system')goto(n);
+    else if(n.type==='location'){let p=n;while(p&&p.type!=='planet'&&p.type!=='moon')p=p.parent;
+      if(p){VIEW={level:'planet',node:p};renderCrumbs();renderTrack()}select(n)}
+    else{let p=n;while(p&&p.type!=='system')p=p.parent;if(p&&VIEW.node!==p){VIEW={level:'system',node:p};renderCrumbs();renderTrack()}select(n)}});
 }
 function renderTrack(){
   const p=document.getElementById('track');
@@ -859,6 +1006,7 @@ function refreshForm(){
   if(t==='system')fillSel($('aParent'),sectors.map(n=>[n.id,n.name]),true);
   else if(t==='location')fillSel($('aParent'),all.filter(n=>isBody.includes(n.type)).map(n=>[n.id,n.name+' ('+(sysOf(n)?sysOf(n).name:'?')+')']),true);
   else if(t!=='sector')fillSel($('aParent'),systems.map(n=>[n.id,n.name+' ('+(n.parent?n.parent.name:'')+')']),true);
+  show('f-site',t==='location');
   show('f-coords',t==='sector'||t==='system');
   show('f-star',t==='system'); show('f-jump',t==='system');
   const placeable=SPRITE_ADD[t];
@@ -880,8 +1028,8 @@ function refreshForm(){
   show('f-color',t==='planet'||t==='moon'); show('f-pattern',t==='planet'||t==='moon');
   show('f-rings',t==='planet'); show('f-size',t==='planet');
   show('f-look',t==='station'||t==='ship');
-  if(t==='station')fillSel($('aLook'),[['','auto'],['ring','ring'],['spin','spin'],['spar','spar']],true);
-  if(t==='ship')fillSel($('aLook'),[['','auto'],['freighter','freighter'],['shuttle','shuttle'],['gunship','gunship']],true);
+  if(t==='station')fillSel($('aLook'),[['','auto']].concat(stationLooks().map(k=>[k,k])),true);
+  if(t==='ship')fillSel($('aLook'),[['','auto']].concat(shipLooks().map(k=>[k,k])),true);
   show('f-stats',isBody.includes(t)&&t!=='belt'&&t!=='relay');
   const pm=t==='planet'||t==='moon';
   show('s-atmo',pm);show('s-grav',pm);show('s-clim',pm);show('s-surf',pm);
@@ -929,6 +1077,7 @@ function formBlock(t,nm,depth){
     else {if($('aFrom').value===$('aTo').value)return {err:'from and to must differ'};
       meta.push('between: '+$('aFrom').value+', '+$('aTo').value);meta.push('at: '+(+$('aAt').value||40))}
   }
+  if(t==='location'&&$('aSX').value!==''&&$('aSY').value!=='')meta.push('site: '+(+$('aSX').value)+', '+(+$('aSY').value));
   const mv=(id,k)=>{const v=$(id).value.trim();if(v)meta.push(k+': '+v)};
   if(t==='planet'||t==='moon'){mv('aColor','color');mv('aPattern','pattern');if(t==='planet'&&$('aRings').value)meta.push('rings: yes');if(t==='planet')mv('aSize','size');
     mv('aAtmo','atmosphere');mv('aGrav','gravity');mv('aClim','climate');mv('aSurf','surface')}
@@ -1009,6 +1158,8 @@ function startEdit(node){
   if(node.meta.between){const p=node.meta.between.split(',').map(s=>s.trim());
     $('aFrom').value=p[0]||'';$('aTo').value=p[1]||'';$('aAt').value=node.meta.at||40}
   $('aX').value=node.x??50; $('aY').value=node.y??50;
+  if(node.meta.site){const c=node.meta.site.split(/[, ]+/);$('aSX').value=c[0]||'';$('aSY').value=c[1]||''}
+  else{$('aSX').value='';$('aSY').value=''}
   $('aStar').value=node.meta.star||'orange';
   $('aJump').value=node.meta.jump||'';
   $('aColor').value=PAL[node.meta.color]?node.meta.color:'';
@@ -1036,7 +1187,8 @@ function cancelEdit(reset=true){
 }
 function setAddContext(){
   if(editTarget||$('aName').value.trim())return;
-  if(VIEW.level==='system'&&VIEW.node){$('aType').value='planet';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
+  if(VIEW.level==='planet'&&VIEW.node){$('aType').value='location';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
+  else if(VIEW.level==='system'&&VIEW.node){$('aType').value='planet';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
   else if(VIEW.level==='sector'&&VIEW.node){$('aType').value='system';refreshForm();$('aParent').value=VIEW.node.id;refreshForm()}
   else{$('aType').value='sector';refreshForm()}
 }
@@ -1066,6 +1218,11 @@ if(saved&&saved.src===(SRC||'')&&saved.text&&saved.text.trim()){
     .then(t=>{load(t);setStatus(SRC.split('/').pop())})
     .catch(e=>{load('');setStatus('no '+SRC+' \u2014 empty galaxy')});
 }else{load('');setStatus('empty galaxy')}
+if(SPRITES_SRC){
+  fetch(SPRITES_SRC).then(r=>r.ok?r.text():Promise.reject())
+    .then(t=>{if(applySprites(parseSprites(t))){draw();if(document.getElementById('aType'))refreshForm()}})
+    .catch(()=>{/* keep built-in sprites */});
+}
 document.fonts&&document.fonts.ready.then(draw);
 </script>
 </body>
