@@ -304,7 +304,9 @@ function profileFor(node){
   const nC=4+Math.floor(R()*7);
   for(let i=0;i<nC;i++){const a=R()*6.2832,u=R()*2-1,s=Math.sqrt(1-u*u);
     craters.push([s*Math.cos(a),u,s*Math.sin(a),.14+R()*.3])}
-  const P={cols:PAL[pname],pat,freq:2+R()*3,ph:R()*6.2832,tilt:(R()-.5)*.6,
+  const cols=PAL[pname];
+  const P={cols,mapCols:[shade(cols[0],.45),cols[0],cols[1],cols[2],shade(cols[2],1.4)],
+    pat,freq:2+R()*3,ph:R()*6.2832,tilt:(R()-.5)*.6,
     sea:.5+(R()-.5)*.1,craters,
     rings:/^(y|yes|true|1)/i.test(node.meta.rings||''),
     fbm:fbmFor(node.name)};
@@ -316,17 +318,21 @@ function terrainValue(P,x,y,z,detail){
     case 'bands': return .5+.45*Math.sin(y*P.freq*2+P.ph+f(x,y,z,3,2)*1.2);
     case 'swirl': {const lon=Math.atan2(z,x);
       return .5+.45*Math.sin(y*P.freq*1.5+lon*2+f(x,y,z,3,2)*2.6+P.ph)}
-    case 'ocean': {const e=.5+.5*f(x,y,z,detail?6:4,1.6);
-      if(e>P.sea)return .58+.4*Math.min(1,(e-P.sea)*2.6);
-      return .1+.28*Math.max(0,Math.min(1,1-(P.sea-e)*3))}
-    case 'spots': return f(x,y,z,3,3)>.05?.85:.3;
-    case 'craters': {let v=.55+f(x,y,z,3,3)*.1;
+    case 'ocean': {
+      const cont=f(x,y,z,2,.9), det=f(x+7,y,z,detail?5:3,2.6);
+      const d=(.5+.38*cont+.2*det)-P.sea;
+      if(d<0)return .2-.14*Math.min(1,-d*3.2);          // solid deep sea, shallows at the coast
+      return .44+.55*Math.min(1,d*3.6)}                  // lowland -> highland -> peaks
+    case 'spots': {
+      let v=f(x,y,z,3,1.5)>.08?.74:.34;                  // large contiguous patches
+      return v+.06*f(x+9,y,z,2,5)}
+    case 'craters': {let v=.55+.12*f(x,y,z,2,1.1)+.04*f(x+5,y,z,2,5);
       for(const c of P.craters){const d=Math.acos(Math.max(-1,Math.min(1,x*c[0]+y*c[1]+z*c[2])));
-        if(d<c[3])v=d<c[3]*.62?.16:.92}
+        if(d<c[3])v=d<c[3]*.62?.14:.95}
       return v}
-    case 'icecaps': {if(Math.abs(y)+f(x,y,z,3,2)*.22>.72)return .96;
-      return .16+.55*(.5+.5*f(x+3,y,z,detail?6:4,1.8))}
-    default: return .5+.16*f(x,y,z,detail?5:3,3.5);
+    case 'icecaps': {if(Math.abs(y)+f(x,y,z,3,2)*.22>.72)return .97;
+      return .28+.45*(.5+.5*f(x+3,y,z,detail?5:3,1.5))}
+    default: return .5+.12*f(x,y,z,2,1.4)+.05*f(x+4,y,z,detail?3:2,6);
   }
 }
 const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
@@ -418,9 +424,16 @@ function syncEditor(){
 
 /* ---------- drawing primitives ---------- */
 function px(x,y,c){CTX.fillStyle=c;CTX.fillRect(Math.round(x),Math.round(y),1,1)}
-function dith(x,y,v,cols){ // v 0..1 across cols with ordered dither
-  const n=cols.length-1; const f=v*n; let i=Math.floor(f); const fr=f-i;
-  if(i>=n)i=n-1;const th=(BAYER[(y&3)][(x&3)]+.5)/16; return cols[Math.min(n,i+(fr>th?1:0))];
+function dith(x,y,v,cols,soft=1){ // v 0..1 across cols; soft<1 = solid fields, dithered edges
+  const n=cols.length-1; const f=v*n; let i=Math.floor(f); let fr=f-i;
+  if(i>=n){i=n-1;fr=1}
+  if(soft<1)fr=Math.max(0,Math.min(1,(fr-.5)/soft+.5));
+  const th=(BAYER[(y&3)][(x&3)]+.5)/16; return cols[Math.min(n,i+(fr>th?1:0))];
+}
+function shade(hex,k){ // k<1 darken, k>1 lighten
+  const n=parseInt(hex.slice(1),16);let r=(n>>16)&255,g=(n>>8)&255,b=n&255;
+  if(k<=1){r*=k;g*=k;b*=k}else{const t=k-1;r+=(255-r)*t;g+=(255-g)*t;b+=(255-b)*t}
+  return '#'+((1<<24)|(Math.round(r)<<16)|(Math.round(g)<<8)|Math.round(b)).toString(16).slice(1);
 }
 function text(x,y,s,c,align='left',size=8){ctx.font=size+'px Silkscreen, monospace';ctx.textAlign=align;ctx.textBaseline='top';ctx.fillStyle=c;ctx.fillText(s,Math.round(x),Math.round(y))}
 function starfield(seed,density=0.004){
@@ -610,11 +623,11 @@ function drawPlanetMap(){
       for(let x=0;x<mw;x++){
         const lon=((x+.5)/mw-.5)*6.2832;
         const v=Math.max(0,Math.min(1,terrainValue(P,cl*Math.cos(lon),sy,cl*Math.sin(lon),true)));
-        px(x,y,dith(x,y,v,P.cols));
+        px(x,y,dith(x,y,v,P.mapCols,.4));
       }}
-    og.fillStyle='rgba(6,7,15,.4)';
-    for(let gx=1;gx<12;gx++){const x=Math.round(gx*mw/12);for(let y=0;y<mh;y+=3)og.fillRect(x,y,1,1)}
-    for(let gy=1;gy<6;gy++){const y=Math.round(gy*mh/6);for(let x=0;x<mw;x+=3)og.fillRect(x,y,1,1)}
+    og.fillStyle='rgba(6,7,15,.22)';
+    for(let gx=1;gx<12;gx++){const x=Math.round(gx*mw/12);for(let y=0;y<mh;y+=4)og.fillRect(x,y,1,1)}
+    for(let gy=1;gy<6;gy++){const y=Math.round(gy*mh/6);for(let x=0;x<mw;x+=4)og.fillRect(x,y,1,1)}
     CTX=old;
     MAPCACHE={key,cv:oc};
   }
@@ -630,8 +643,13 @@ function drawPlanetMap(){
     const x=mx+Math.round(sx/100*mw), y=my+Math.round(sy/100*mh);
     const hot=HOVER===s||SEL===s;
     box(x-2,y-2,4,4,hot?'#e9b34e':'#5ad6d6'); px(x,y,hot?'#e9b34e':'#5ad6d6');
-    const nm=s.name.toUpperCase();
+    let nm=s.name.toUpperCase();
     ctx.font='8px Silkscreen, monospace';
+    const maxw=mw-6;
+    if(ctx.measureText(nm).width+4>maxw){
+      while(nm.length>4&&ctx.measureText(nm+'..').width+4>maxw)nm=nm.slice(0,-1);
+      nm+='..';
+    }
     const w2=Math.ceil(ctx.measureText(nm).width)+4;
     let lx=x-(w2>>1); lx=Math.max(mx,Math.min(mx+mw-w2,lx));
     const ly=(y+5<my+mh-12)?y+5:y-14;
