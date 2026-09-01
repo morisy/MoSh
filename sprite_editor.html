@@ -1,0 +1,404 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Sprite Editor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Silkscreen&family=VT323&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#06070f; --panel:#090b16; --line:#26305a; --text:#c6cde3; --dim:#5e6a94;
+  --amber:#e9b34e; --cyan:#5ad6d6; --rust:#c9583a;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:var(--bg);color:var(--text);font:18px/1.25 "VT323",monospace}
+button,input,select{font:inherit;color:inherit}
+button{background:transparent;border:0;padding:0 2px;cursor:pointer;text-transform:uppercase;color:var(--cyan);font:inherit}
+button::before{content:"["}
+button::after{content:"]"}
+button::before,button::after{color:var(--dim)}
+button:hover{background:var(--cyan);color:#06070f}
+button:hover::before,button:hover::after{color:#06070f}
+button u{color:var(--amber);text-decoration:none}
+button:hover u{color:#06070f}
+button:focus-visible,textarea:focus-visible,.tab:focus-visible{outline:1px solid var(--cyan);outline-offset:1px}
+#app{display:grid;grid-template-rows:auto 1fr;grid-template-columns:1fr 340px;height:100%}
+header{grid-column:1/3;display:flex;align-items:center;gap:10px;padding:4px 8px;border-bottom:1px solid var(--line);background:var(--panel);flex-wrap:wrap}
+header h1{margin:0;font:inherit;font-size:18px;background:var(--amber);color:#06070f;padding:0 8px;letter-spacing:1px}
+#status{color:var(--dim);font-size:16px;flex:1}
+#status.err{color:var(--rust)}
+#opts{position:relative}
+#menu{position:absolute;right:0;top:calc(100% + 3px);background:#070910;border:1px solid var(--cyan);box-shadow:5px 5px 0 #000;display:none;flex-direction:column;min-width:170px;z-index:9;padding:2px 0}
+#menu.open{display:flex}
+#menu button{border:0;text-align:left;padding:3px 12px;color:var(--text)}
+#menu button::before,#menu button::after{content:""}
+#menu button:hover{background:var(--cyan);color:#06070f}
+#stage{position:relative;overflow:hidden;background:var(--bg);display:flex;flex-direction:column}
+#palette{display:flex;gap:8px;padding:8px 10px;align-items:center;border-bottom:1px solid var(--line);flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:4px;cursor:pointer;padding:1px 6px;color:var(--dim);text-transform:uppercase;font-size:16px}
+.chip .swx{width:14px;height:14px;border:1px solid var(--line);flex:none}
+.chip.on{background:var(--amber);color:#06070f}
+.chip.on .swx{border-color:#06070f}
+#gridwrap{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
+#grid{image-rendering:pixelated;cursor:crosshair;touch-action:none}
+#previews{display:flex;gap:16px;align-items:flex-end;padding:8px 10px;border-top:1px solid var(--line)}
+#previews canvas{image-rendering:pixelated;background:#06070f;border:1px solid #14192e}
+#previews .pl{color:var(--dim);font-size:14px;text-align:center}
+aside{border-left:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);background:#070910}
+.tab{flex:1;padding:3px 6px;text-align:center;cursor:pointer;font:inherit;font-size:17px;text-transform:uppercase;color:var(--dim)}
+.tab+.tab{border-left:1px solid var(--line)}
+.tab:hover{color:var(--text)}
+.tab.on{color:#06070f;background:var(--amber)}
+.pane{display:none;flex:1;min-height:0;overflow:auto;padding:10px 12px}
+.pane.on{display:block}
+#edit.pane.on{display:flex;flex-direction:column;padding:0}
+textarea{flex:1;width:100%;resize:none;border:0;background:#070910;color:var(--text);padding:10px;font:16px/1.3 "VT323",monospace}
+.editbar{padding:4px 8px;border-top:1px solid var(--line);color:var(--dim);font-size:15px}
+.editbar::before{content:"> "}
+h3.sub{font:inherit;font-size:16px;font-weight:normal;color:var(--dim);text-transform:uppercase;margin:14px 0 4px;letter-spacing:1px}
+h3.sub::before{content:"\2500\2500 "}
+h3.sub::after{content:" \2500\2500\2500\2500\2500\2500\2500\2500\2500\2500"}
+ul.splist{list-style:none;margin:0;padding:0}
+ul.splist li{display:flex;gap:8px;align-items:center;padding:3px 4px;cursor:pointer}
+ul.splist li:hover{background:#11162c}
+ul.splist li.on{background:var(--amber);color:#06070f}
+ul.splist li.on .k{color:#06070f}
+ul.splist canvas{image-rendering:pixelated;background:#06070f;border:1px solid #14192e;flex:none}
+ul.splist .k{color:var(--dim);font-size:15px;text-transform:uppercase;margin-left:auto}
+.frm label{display:block;margin:7px 0 0;color:var(--dim)}
+.frm select,.frm input{display:block;width:100%;background:#070910;border:1px solid var(--line);color:var(--text);font:inherit;padding:1px 5px;margin-top:1px}
+.frm select:focus,.frm input:focus{outline:0;border-color:var(--cyan)}
+.pair{display:flex;gap:6px;align-items:center;color:var(--dim)}
+.pair input{width:70px}
+.btnrow{margin-top:10px;display:flex;gap:10px;flex-wrap:wrap}
+#err{color:var(--rust)}
+.pane::-webkit-scrollbar,textarea::-webkit-scrollbar{width:10px}
+.pane::-webkit-scrollbar-track,textarea::-webkit-scrollbar-track{background:#070910}
+.pane::-webkit-scrollbar-thumb,textarea::-webkit-scrollbar-thumb{background:var(--line)}
+@media (max-width:820px){
+  #app{grid-template-columns:1fr;grid-template-rows:auto 55vh 1fr}
+  header{grid-column:1}
+  aside{border-left:0;border-top:1px solid var(--line)}
+}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <h1>SPRITE ED</h1>
+    <span id="status"></span>
+    <div id="opts">
+      <button id="bOpts" title="Options">Opt</button>
+      <div id="menu">
+        <button id="bOpen"><u>O</u>pen file</button>
+        <button id="bCopy"><u>C</u>opy markdown</button>
+        <button id="bSpin"><u>S</u>pin preview: on</button>
+        <button id="bReload"><u>R</u>eload source</button>
+      </div>
+    </div>
+    <input type="file" id="file" accept=".md,.txt,.markdown" hidden>
+  </header>
+  <div id="stage">
+    <div id="palette"></div>
+    <div id="gridwrap"><canvas id="grid"></canvas></div>
+    <div id="previews">
+      <div><canvas id="p1" width="34" height="26"></canvas><div class="pl">1x</div></div>
+      <div><canvas id="p2" width="68" height="52"></canvas><div class="pl">2x</div></div>
+      <div><canvas id="p4" width="136" height="104"></canvas><div class="pl">4x</div></div>
+      <div><canvas id="pr" width="80" height="80"></canvas><div class="pl">rotation</div></div>
+    </div>
+  </div>
+  <aside>
+    <div class="tabs">
+      <div class="tab on" data-p="list" tabindex="0">Sprites</div>
+      <div class="tab" data-p="edit" tabindex="0">Edit</div>
+    </div>
+    <div class="pane on" id="list">
+      <ul class="splist" id="splist"></ul>
+      <div class="frm">
+        <h3 class="sub">Selected</h3>
+        <label>Name <input id="sName" autocomplete="off"></label>
+        <label>Type
+          <select id="sKind">
+            <option value="ship">ship (random look pool)</option>
+            <option value="station">station (random look pool)</option>
+            <option value="other">other (matched by body type)</option>
+          </select></label>
+        <label>Size <span class="pair"><input id="sW" type="number" min="1" max="24"> x <input id="sH" type="number" min="1" max="24"></span></label>
+        <div class="btnrow">
+          <button id="bNew">New</button>
+          <button id="bDup">Duplicate</button>
+          <button id="bDel">Delete</button>
+        </div>
+        <p id="err"></p>
+        <p class="editbar" style="border:0;padding:8px 0 0">Click or drag to paint. Right-click erases. Ships should face right.</p>
+      </div>
+    </div>
+    <div class="pane" id="edit">
+      <textarea id="src" spellcheck="false"></textarea>
+      <div class="editbar">This text is the live sprite sheet — copy it out to sprites.md to keep it.</div>
+    </div>
+  </aside>
+</div>
+
+<script>
+/* ============ CONFIG ============ */
+const DEFAULT_SRC='sprites.md';   // set '' to start from built-ins only
+/* ================================ */
+
+/* ---- shared with starchart.html: palette, parser, rotated renderer ---- */
+const SPRC={o:'#323a52',h:'#707a94',l:'#b0b8cc',c:'#5ad6d6',e:'#e9b34e',r:'#c9583a'};
+const LEGEND=[['.','erase'],['o','dark'],['h','hull'],['l','light'],['c','cyan'],['e','amber'],['r','red']];
+function parseSprites(text){
+  const list=[];let cur=null,run=[],best=[];
+  const legend=/^[.ohlcer]+$/;
+  const commit=()=>{if(cur&&best.length){const w=Math.max(...best.map(r=>r.length));cur.grid=best.map(r=>r.padEnd(w,'.'));list.push(cur)}cur=null;best=[];run=[]};
+  text.split(/\r?\n/).forEach(l=>{
+    const hm=l.match(/^#{1,6}\s+(.+)$/);
+    if(hm){commit();cur={name:hm[1].trim().toLowerCase(),kind:'other',grid:[]};return}
+    if(!cur)return;
+    const tm=l.match(/^type\s*:\s*(\w+)/i);
+    if(tm){cur.kind=tm[1].toLowerCase();return}
+    const t=l.trim();
+    if(legend.test(t)&&t.length>=3){run.push(t);if(run.length>best.length)best=run.slice()}
+    else run=[];
+  });
+  commit();
+  return list;
+}
+function serialize(list){
+  const head=['Sprite sheet for Starchart. One character per pixel:',
+  '  .  transparent       o  dark hull',
+  '  h  hull grey         l  light grey',
+  '  c  cyan (lights)     e  amber (engines)',
+  '  r  red (hardpoints)','','Ships face right; the map rotates them in flight.',''];
+  const body=list.map(s=>['# '+s.name].concat(s.kind!=='other'?['type: '+s.kind]:[]).concat(['']).concat(s.grid).join('\n'));
+  return head.join('\n')+'\n'+body.join('\n\n')+'\n';
+}
+function drawSpriteTo(c2,cx,cy,grid,ang=0,s=1){
+  const gh=grid.length, gw=grid[0].length;
+  const R=Math.ceil(Math.hypot(gw,gh)/2*s), ca=Math.cos(ang), sa=Math.sin(ang);
+  for(let dy=-R;dy<=R;dy++)for(let dx=-R;dx<=R;dx++){
+    const sx=Math.round((dx*ca+dy*sa)/s+gw/2-.5), sy=Math.round((-dx*sa+dy*ca)/s+gh/2-.5);
+    if(sx<0||sy<0||sx>=gw||sy>=gh)continue;
+    const ch=grid[sy][sx]; if(ch==='.')continue;
+    c2.fillStyle=SPRC[ch]; c2.fillRect(Math.round(cx+dx),Math.round(cy+dy),1,1);
+  }
+}
+
+/* ---- state ---- */
+let SP=[], sel=0, brush='h', painting=false, SPIN=!matchMedia('(prefers-reduced-motion: reduce)').matches;
+const status=document.getElementById('status'), src=document.getElementById('src');
+function setStatus(s,err){status.textContent=s;status.className=err?'err':''}
+const cur=()=>SP[sel];
+
+const BUILTIN=`# freighter\ntype: ship\n\n..hhhhhhh..\nehlhlhlhhc.\nehlhlhlhhcc\nehlhlhlhhc.\n..hhhhhhh..\n\n# shuttle\ntype: ship\n\ne.hhll..\nehhhlllc\ne.hhll..\n\n# gunship\ntype: ship\n\n..hhh.r...\nehhhhhhllc\n..hhh.r...\n\n# ring\ntype: station\n\n..lll..\n.l...l.\nl..h..l\nl.hch.l\nl..h..l\n.l...l.\n..lll..\n\n# spin\ntype: station\n\nl.....l\n.h...h.\n..hch..\n..chc..\n..hch..\n.h...h.\nl.....l\n\n# spar\ntype: station\n\n..c..\n..h..\n.lhl.\n..h..\n.lhl.\n..h..\n.ooo.\n..e..\n\n# derelict\n\n..oh.oo...\n.ohh..oho.\noo.h.ooh.o\n....o..o..\n\n# relay\n\n...l...\nll.h.ll\nll.c.ll\nll.h.ll\n`;
+
+/* ---- storage ---- */
+const q=new URLSearchParams(location.search);
+const SRC=q.get('src')||DEFAULT_SRC;
+const LSKEY='starchart.sprites';
+function lsGet(){try{return JSON.parse(localStorage.getItem(LSKEY)||'null')}catch(e){return null}}
+function lsPut(){try{localStorage.setItem(LSKEY,JSON.stringify({text:src.value,ts:Date.now(),src:SRC||''}))}catch(e){}}
+function lsClear(){try{localStorage.removeItem(LSKEY)}catch(e){}}
+
+/* ---- load / sync ---- */
+function loadText(text,fromEditor){
+  const list=parseSprites(text);
+  if(!list.length){setStatus('no sprites found in that text',true);return false}
+  SP=list; if(sel>=SP.length)sel=0;
+  if(!fromEditor)src.value=serialize(SP);
+  renderAll(); lsPut(); return true;
+}
+function commitModel(){ // model -> text, storage, ui
+  src.value=serialize(SP); lsPut(); renderAll();
+}
+let tmr=null;
+src.addEventListener('input',()=>{clearTimeout(tmr);tmr=setTimeout(()=>{
+  if(loadText(src.value,true))setStatus('updated '+new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'}));
+},350)});
+
+/* ---- rendering ---- */
+function renderAll(){renderPalette();renderList();renderFields();renderGrid();renderPreviews()}
+function renderPalette(){
+  const p=document.getElementById('palette');p.innerHTML='';
+  LEGEND.forEach(([ch,label])=>{
+    const d=document.createElement('div');d.className='chip'+(brush===ch?' on':'');
+    const sw=document.createElement('span');sw.className='swx';
+    sw.style.background=ch==='.'?'transparent':SPRC[ch];
+    d.appendChild(sw);d.appendChild(document.createTextNode(label));
+    d.onclick=()=>{brush=ch;renderPalette()};
+    p.appendChild(d);
+  });
+}
+function renderList(){
+  const ul=document.getElementById('splist');ul.innerHTML='';
+  SP.forEach((s,i)=>{
+    const li=document.createElement('li');li.className=i===sel?'on':'';
+    const th=document.createElement('canvas');th.width=26;th.height=14;
+    drawSpriteTo(th.getContext('2d'),13,7,s.grid);
+    li.appendChild(th);
+    li.appendChild(document.createTextNode(s.name));
+    const k=document.createElement('span');k.className='k';k.textContent=s.kind;li.appendChild(k);
+    li.onclick=()=>{sel=i;renderAll()};
+    ul.appendChild(li);
+  });
+}
+function renderFields(){
+  const s=cur(); if(!s)return;
+  document.getElementById('sName').value=s.name;
+  document.getElementById('sKind').value=['ship','station'].includes(s.kind)?s.kind:'other';
+  document.getElementById('sW').value=s.grid[0].length;
+  document.getElementById('sH').value=s.grid.length;
+}
+let cell=20;
+function renderGrid(){
+  const s=cur(); if(!s)return;
+  const gw=s.grid[0].length, gh=s.grid.length;
+  const wrap=document.getElementById('gridwrap');
+  cell=Math.max(8,Math.min(30,Math.floor(Math.min((wrap.clientWidth-24)/gw,(wrap.clientHeight-24)/gh))));
+  const cv=document.getElementById('grid');
+  cv.width=gw*cell+1; cv.height=gh*cell+1;
+  const g=cv.getContext('2d');
+  for(let y=0;y<gh;y++)for(let x=0;x<gw;x++){
+    const ch=s.grid[y][x];
+    g.fillStyle=ch==='.'?((x+y)%2?'#0a0d18':'#0d101e'):SPRC[ch];
+    g.fillRect(x*cell,y*cell,cell,cell);
+  }
+  g.strokeStyle='#1a2140'; g.lineWidth=1; g.beginPath();
+  for(let x=0;x<=gw;x++){g.moveTo(x*cell+.5,0);g.lineTo(x*cell+.5,gh*cell)}
+  for(let y=0;y<=gh;y++){g.moveTo(0,y*cell+.5);g.lineTo(gw*cell,y*cell+.5)}
+  g.stroke();
+}
+function renderPreviews(){
+  const s=cur(); if(!s)return;
+  [['p1',1],['p2',2],['p4',4]].forEach(([id,sc])=>{
+    const c=document.getElementById(id), g=c.getContext('2d');
+    g.fillStyle='#06070f'; g.fillRect(0,0,c.width,c.height);
+    drawSpriteTo(g,c.width/2,c.height/2,s.grid,0,sc);
+  });
+}
+let rot=0;
+function spinTick(){
+  if(SPIN){
+    const c=document.getElementById('pr'), g=c.getContext('2d');
+    g.fillStyle='#06070f'; g.fillRect(0,0,80,80);
+    const s=cur(); if(s){rot+=0.012;drawSpriteTo(g,40,40,s.grid,rot,3)}
+  }
+  requestAnimationFrame(spinTick);
+}
+
+/* ---- painting ---- */
+const gcv=document.getElementById('grid');
+function paintAt(e,ch){
+  const s=cur(); if(!s)return;
+  const r=gcv.getBoundingClientRect();
+  const pt=e.touches?e.touches[0]:e;
+  const x=Math.floor((pt.clientX-r.left)/cell), y=Math.floor((pt.clientY-r.top)/cell);
+  if(x<0||y<0||y>=s.grid.length||x>=s.grid[0].length)return;
+  if(s.grid[y][x]===ch)return;
+  s.grid[y]=s.grid[y].slice(0,x)+ch+s.grid[y].slice(x+1);
+  commitDebounced();
+  renderGrid(); renderPreviews();
+}
+let ctmr=null;
+function commitDebounced(){clearTimeout(ctmr);ctmr=setTimeout(()=>{src.value=serialize(SP);lsPut();renderList()},250)}
+gcv.addEventListener('mousedown',e=>{painting=true;paintAt(e,e.button===2?'.':brush)});
+gcv.addEventListener('mousemove',e=>{if(painting)paintAt(e,(e.buttons&2)?'.':brush)});
+window.addEventListener('mouseup',()=>painting=false);
+gcv.addEventListener('contextmenu',e=>e.preventDefault());
+gcv.addEventListener('touchstart',e=>{e.preventDefault();painting=true;paintAt(e,brush)},{passive:false});
+gcv.addEventListener('touchmove',e=>{e.preventDefault();if(painting)paintAt(e,brush)},{passive:false});
+window.addEventListener('touchend',()=>painting=false);
+window.addEventListener('resize',renderGrid);
+
+/* ---- fields ---- */
+const err=(m)=>{document.getElementById('err').textContent=m||''};
+document.getElementById('sName').addEventListener('change',e=>{
+  const v=e.target.value.trim().toLowerCase().replace(/\s+/g,'-');
+  if(!v)return err('name required');
+  if(SP.some((s,i)=>i!==sel&&s.name===v))return err('name already in use');
+  err(); cur().name=v; commitModel();
+});
+document.getElementById('sKind').addEventListener('change',e=>{cur().kind=e.target.value;commitModel()});
+function resize(w,h){
+  const s=cur(); w=Math.max(1,Math.min(24,w|0)); h=Math.max(1,Math.min(24,h|0));
+  let g=s.grid.map(r=>r.length>w?r.slice(0,w):r.padEnd(w,'.'));
+  while(g.length>h)g.pop();
+  while(g.length<h)g.push('.'.repeat(w));
+  s.grid=g; commitModel();
+}
+document.getElementById('sW').addEventListener('change',e=>resize(+e.target.value,cur().grid.length));
+document.getElementById('sH').addEventListener('change',e=>resize(cur().grid[0].length,+e.target.value));
+document.getElementById('bNew').onclick=()=>{
+  let n=1; while(SP.some(s=>s.name==='sprite-'+n))n++;
+  SP.push({name:'sprite-'+n,kind:'ship',grid:Array(5).fill('.'.repeat(9))});
+  sel=SP.length-1; commitModel();
+};
+document.getElementById('bDup').onclick=()=>{
+  const s=cur(); if(!s)return;
+  let n=s.name+'-2', i=2; while(SP.some(x=>x.name===n))n=s.name+'-'+(++i);
+  SP.splice(sel+1,0,{name:n,kind:s.kind,grid:s.grid.slice()});
+  sel++; commitModel();
+};
+document.getElementById('bDel').onclick=()=>{
+  const s=cur(); if(!s)return;
+  if(!confirm('Delete sprite "'+s.name+'"?'))return;
+  SP.splice(sel,1); if(!SP.length)SP.push({name:'sprite-1',kind:'ship',grid:Array(5).fill('.'.repeat(9))});
+  sel=Math.max(0,sel-1); commitModel();
+};
+
+/* ---- tabs / menu / files ---- */
+function showPane(id){document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t.dataset.p===id));document.querySelectorAll('.pane').forEach(t=>t.classList.toggle('on',t.id===id));if(id==='list')renderGrid()}
+document.querySelectorAll('.tab').forEach(t=>{t.onclick=()=>showPane(t.dataset.p);t.onkeydown=e=>{if(e.key==='Enter')showPane(t.dataset.p)}});
+const menu=document.getElementById('menu');
+document.getElementById('bOpts').onclick=e=>{e.stopPropagation();menu.classList.toggle('open')};
+document.addEventListener('click',e=>{if(!menu.contains(e.target))menu.classList.remove('open')});
+document.getElementById('bOpen').onclick=()=>{menu.classList.remove('open');document.getElementById('file').click()};
+document.getElementById('file').onchange=e=>{const f=e.target.files[0];if(!f)return;f.text().then(t=>{if(loadText(t))setStatus(f.name)})};
+document.getElementById('bCopy').onclick=async()=>{
+  menu.classList.remove('open');
+  const t=src.value;
+  try{await navigator.clipboard.writeText(t);setStatus('copied to clipboard')}
+  catch(e){const ta=document.createElement('textarea');ta.value=t;document.body.appendChild(ta);ta.select();
+    try{document.execCommand('copy');setStatus('copied to clipboard')}catch(e2){setStatus('copy failed',true)}
+    ta.remove()}
+};
+const bSpin=document.getElementById('bSpin');
+const spinLabel=()=>bSpin.innerHTML='<u>S</u>pin preview: '+(SPIN?'on':'off');
+spinLabel();
+bSpin.onclick=()=>{SPIN=!SPIN;spinLabel()};
+document.getElementById('bReload').onclick=()=>{menu.classList.remove('open');
+  if(confirm('Discard local edits and reload '+(SRC||'built-in sprites')+'?')){lsClear();location.reload()}};
+document.addEventListener('keydown',e=>{
+  const tag=e.target.tagName;
+  if(tag==='TEXTAREA'||tag==='INPUT'||tag==='SELECT')return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return;
+  const k=e.key.toLowerCase();
+  if(k==='o')document.getElementById('bOpen').click();
+  else if(k==='c')document.getElementById('bCopy').click();
+  else if(k==='s')bSpin.click();
+  else if(k==='r')document.getElementById('bReload').click();
+  const n='.ohlcer'.indexOf(e.key);
+  if(e.key!=='.'&&n>0){brush=e.key;renderPalette()}
+  if(e.key==='.'){brush='.';renderPalette()}
+});
+
+/* ---- boot ---- */
+const saved=lsGet();
+if(saved&&saved.src===(SRC||'')&&saved.text&&saved.text.trim()&&loadText(saved.text)){
+  setStatus('restored local edits '+new Date(saved.ts).toLocaleString([],{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}));
+}else if(SRC){
+  setStatus('loading\u2026');
+  fetch(SRC).then(r=>{if(!r.ok)throw new Error(r.status);return r.text()})
+    .then(t=>{if(loadText(t))setStatus(SRC.split('/').pop())})
+    .catch(e=>{loadText(BUILTIN);setStatus('no '+SRC+' \u2014 loaded built-in set')});
+}else{loadText(BUILTIN);setStatus('built-in set')}
+document.fonts&&document.fonts.ready.then(renderAll);
+spinTick();
+</script>
+</body>
+</html>
