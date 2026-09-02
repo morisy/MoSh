@@ -136,6 +136,11 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
         <button id="bAnim">Or<u>b</u>its: on</button>
         <button id="bCopy"><u>C</u>opy markdown</button>
         <button id="bReload"><u>R</u>eload source</button>
+        <button class="wexp" id="bXS">Export: surface</button>
+        <button class="wexp" id="bXH">Export: heightmap 16-bit</button>
+        <button class="wexp" id="bXN">Export: normal map</button>
+        <button class="wexp" id="bXC">Export: cloud map</button>
+        <button class="wexp" id="bXJ">Export: locations JSON</button>
       </div>
     </div>
     <input type="file" id="file" accept=".md,.txt,.markdown" hidden>
@@ -227,6 +232,7 @@ function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul
 function latticeHash(x,y,z,s){let h=x*374761393+y*668265263+z*2147483647+s*144665;h=(h^(h>>>13))|0;h=Math.imul(h,1274126177);h=(h^(h>>>16))>>>0;return h/4294967296}
 function smooth(t){return t*t*(3-2*t)}
 function clamp01(v){return v<0?0:v>1?1:v}
+function sstep(a,b,v){const t=clamp01((v-a)/(b-a));return t*t*(3-2*t)}
 function noise3(x,y,z,s){
   const xi=Math.floor(x),yi=Math.floor(y),zi=Math.floor(z);
   const u=smooth(x-xi),v=smooth(y-yi),w=smooth(z-zi);
@@ -322,7 +328,7 @@ function deriveSettings(seedStr){
   const popLevel=popRoll<.18?0:popRoll<.42?1:popRoll<.72?2:popRoll<.9?3:4;
   return {type,rough:+lerp(.3,.8).toFixed(2),plates:type==="gas"?0:Math.round(lerp(4,16)),
     erosion:+lerp(.2,.8).toFixed(2),sea:+lerp(.35,.65).toFixed(2),ice:+lerp(.1,.6).toFixed(2),
-    craterDensity:+lerp(.2,.9).toFixed(2),popLevel};
+    craterDensity:+lerp(.2,.9).toFixed(2),popLevel,cloudCover:+lerp(.2,.8).toFixed(2)};
 }
 function makeSettlementName(rand){
   const A=["New ","Port ","Fort ","","","","Mount ","Cape ","Station ","Camp "];
@@ -609,6 +615,53 @@ function generateWorld(o,progress){
       color[k]=r;color[k+1]=g;color[k+2]=b;color[k+3]=255;
     }
   }
+  progress("Building normal map");
+  const normal=new Uint8ClampedArray(N*4);
+  const nk=18*(W/1024);
+  for(let y=0;y<H;y++){
+    const yu=Math.max(0,y-1),yd=Math.min(H-1,y+1);
+    for(let x=0;x<W;x++){
+      const i=y*W+x;
+      const dx=elev[y*W+((x+1)%W)]-elev[y*W+((x-1+W)%W)];
+      const dy=elev[yd*W+x]-elev[yu*W+x];
+      let nx=-dx*nk,ny=dy*nk,nz=1;
+      const L=Math.hypot(nx,ny,nz);nx/=L;ny/=L;nz/=L;
+      const k=i*4;
+      normal[k]=(nx*.5+.5)*255;normal[k+1]=(ny*.5+.5)*255;normal[k+2]=(nz*.5+.5)*255;normal[k+3]=255;
+    }
+  }
+  progress("Seeding clouds");
+  const clouds=new Float32Array(N);
+  if(o.cloudCover>0&&type!=="moon"&&type!=="desert"&&type!=="volcanic"){
+    const cc=o.cloudCover;
+    for(let y=0;y<H;y++){
+      const lat=latA[y],aL=absLatA[y],cl=cosLatA[y];
+      for(let x=0;x<W;x++){
+        const i=y*W+x,cx=cl*cosLonA[x],sy=cl*sinLonA[x];
+        let a=0;
+        if(isGas){
+          const turb=(fbm(cx*3,sy*3,lat*4,S+1501,3,2,.5)-.5)*3;
+          const n=fbm(cx*1.5,sy*1.5,lat*16+turb,S+1601,4,2.2,.55);
+          a=sstep(.5-cc*.25,.8,n)*.65;
+        }else if(type==="ice"){
+          const n=ridged(cx*3,sy*3,sinLatA[y]*3,S+1701,4);
+          a=sstep(.4,.8,n)*cc*.6;
+        }else{
+          const dx1=(fbm(cx*1.4,sy*1.4,sinLatA[y]*1.4,S+1801,3,2,.5)-.5)*1.1;
+          const dy1=(fbm(cx*1.4+9,sy*1.4,sinLatA[y]*1.4+4,S+1901,3,2,.5)-.5)*1.1;
+          const n=fbm(cx*2.6+3+dx1,sy*2.6+dy1,sinLatA[y]*2.6+(dx1-dy1)*.5,S+1301,5,2.1,.55);
+          const w=ridged(cx*4+dy1,sy*4+dx1,sinLatA[y]*4,S+1401,3);
+          let v=n*.75+w*.25;
+          const lw=(fbm(cx*1.1+70,sy*1.1,sinLatA[y]*1.1,S+2001,2,2,.5)-.5)*.35;
+          if(isTidal){const day=-cx+lw*1.5;v*=.3+.6*Math.exp(-(day/.32)*(day/.32))}
+          else v*=.85+.15*Math.cos(clamp01(aL+lw)*3*Math.PI);
+          const thr=.5-cc*.3;
+          a=sstep(thr,thr+.2,v)*.92;
+        }
+        clouds[i]=a;
+      }
+    }
+  }
   progress("Founding settlements");
   const lv=POP_LEVELS[o.popLevel];
   const settlements=[];let totalPop=0;
@@ -664,7 +717,7 @@ function generateWorld(o,progress){
   }
   return {
     W,H,type,seedStr:o.seedStr,sea,hasOcean:T.ocean,
-    elev,color,biome,river,
+    elev,color,biome,river,normal,clouds,
     settlements:settlements.map(s=>({name:s.name,u:s.u,v:s.v,pop:s.pop,capital:s.capital,floating:s.floating,biome:s.biome})),
     stats:{typeLabel:T.label,plates:plates?plates.length:0,
       ocean:T.ocean?Math.round(oceanCount/N*100):-1,
@@ -675,7 +728,7 @@ function generateWorld(o,progress){
 if(typeof importScripts==="function"){
   self.onmessage=function(ev){
     const res=generateWorld(ev.data,msg=>self.postMessage({progress:msg}));
-    self.postMessage({result:res},[res.elev.buffer,res.color.buffer,res.biome.buffer,res.river.buffer]);
+    self.postMessage({result:res},[res.elev.buffer,res.color.buffer,res.biome.buffer,res.river.buffer,res.normal.buffer,res.clouds.buffer]);
   };
 }
 </script>
@@ -688,6 +741,8 @@ if(typeof importScripts==="function"){
    A ?src=... in the URL overrides this.     */
 const DEFAULT_SRC='galaxy.md';
 const SPRITES_SRC='sprites.md';   // external sprite sheet; '' keeps built-ins
+const WORLD_RES=1024;             // world grid width (height = half). Changing this
+                                  // reshuffles auto-placed location spots — pick once.
 /* ========================================== */
 
 /* ---------- palette ---------- */
@@ -771,13 +826,13 @@ function worldTypeOf(node){
 }
 function worldOptsFor(node){
   const d=PURE.deriveSettings(node.name);
-  const num=(k,lo,hi)=>{const v=parseFloat(node.meta[k]);return isNaN(v)?d[k==='craters'?'craterDensity':k]:Math.max(lo,Math.min(hi,v))};
+  const num=(k,lo,hi)=>{const v=parseFloat(node.meta[k]);return isNaN(v)?d[k==='craters'?'craterDensity':(k==='clouds'?'cloudCover':k)]:Math.max(lo,Math.min(hi,v))};
   let popLevel=d.popLevel;
   if(node.meta.settlements!==undefined){const v=parseInt(node.meta.settlements);if(!isNaN(v))popLevel=Math.max(0,Math.min(4,v))}
-  return {W:512,H:256,type:worldTypeOf(node),seedStr:node.name,
+  return {W:WORLD_RES,H:WORLD_RES/2,type:worldTypeOf(node),seedStr:node.name,
     rough:num('rough',0,1),plates:node.meta.plates!==undefined?Math.max(0,Math.min(24,parseInt(node.meta.plates)||0)):d.plates,
     erosion:num('erosion',0,1),sea:num('sea',0,1),ice:num('ice',0,1),
-    craterDensity:num('craters',0,1),popLevel};
+    craterDensity:num('craters',0,1),cloudCover:num('clouds',0,1),popLevel};
 }
 const WORLDS={}; let genBusy=false; const genQueue=[];
 function worldKey(node){return JSON.stringify(worldOptsFor(node))}
@@ -816,18 +871,6 @@ function fmtPop(n){
   if(n>=1e6)return (n/1e6).toFixed(1)+'M';
   if(n>=1e3)return Math.round(n/1e3)+'K';
   return String(n);
-}
-/* settlement layer: generated data exposed as selectable pseudo-nodes */
-function settlementNodes(node,res){
-  if(res._snodes)return res._snodes;
-  res._snodes=res.settlements.map(s=>({
-    depth:9,type:'settlement',name:s.name,parent:node,children:[],line:-1,
-    id:node.id+'//'+s.name,
-    meta:{population:fmtPop(s.pop),biome:s.biome,status:s.capital?'capital':(s.floating?'floating':'surface')},
-    desc:['Generated settlement on '+node.name+'.'],gm:[],people:[],objects:[],
-    _u:s.u,_v:s.v,_capital:s.capital,_pop:s.pop
-  }));
-  return res._snodes;
 }
 const PLACEHOLDER={earthlike:['#12305c','#2f8a5c'],tidal:['#5a1c10','#c8861a'],waterworld:['#0a2050','#1f9aa8'],
   moon:['#2a2a2e','#8f8a7c'],ice:['#3a4f7a','#c8dcf0'],desert:['#6b4a20','#c8a060'],volcanic:['#1a1214','#8f1f1f'],gas:['#5c3d10','#ecc768']};
@@ -1103,8 +1146,8 @@ function draw(){
   ITEMS=[]; ctx.fillStyle='#06070f'; ctx.fillRect(0,0,W,H);
   ({galaxy:drawGalaxy,sector:drawSector,system:drawSystem,planet:drawPlanetMap})[VIEW.level]();
 }
-function tick(){RAF=null;if(ANIM&&VIEW.level==='system'){draw();RAF=requestAnimationFrame(tick)}}
-function kickAnim(){if(!RAF&&ANIM&&VIEW.level==='system')RAF=requestAnimationFrame(tick)}
+function tick(){RAF=null;if(ANIM&&(VIEW.level==='system'||VIEW.level==='planet')){draw();RAF=requestAnimationFrame(tick)}}
+function kickAnim(){if(!RAF&&ANIM&&(VIEW.level==='system'||VIEW.level==='planet'))RAF=requestAnimationFrame(tick)}
 function mapXY(n,pad){return[pad+(n.x??50)/100*(W-pad*2),pad+(n.y??50)/100*(H-pad*2)]}
 function drawGalaxy(){
   starfield(hash('galaxy'),.006);
@@ -1146,6 +1189,34 @@ function autoSite(node,s,res){
   }
   return [bu/W*100,bv/H*100];
 }
+let CLOUDOFF=0;
+function drawGlobeInset(res,cx,cy,R){
+  if(!res._px)res._px=res.cv.getContext('2d').getImageData(0,0,res.W,res.H).data;
+  const cd=res._px, nd=res.normal, W2=res.W, H2=res.H;
+  const rot=(ANIM?performance.now()/16000:0)%6.2832;
+  const cr=Math.cos(rot),sr=Math.sin(rot);
+  const offN=(CLOUDOFF%W2)/W2;
+  const Lx=-.42,Ly=-.46,Lz=.78;
+  for(let gy=-R;gy<=R;gy++)for(let gx=-R;gx<=R;gx++){
+    const dx=gx/R,dy=gy/R,d2=dx*dx+dy*dy;
+    if(d2>1)continue;
+    const dz=Math.sqrt(1-d2);
+    const X=dx*cr+dz*sr,Z=-dx*sr+dz*cr;
+    const lat=Math.asin(Math.max(-1,Math.min(1,-dy))),lon=Math.atan2(X,Z);
+    const uN=lon/6.2832+.5;
+    const u=Math.min(W2-1,Math.max(0,(uN*W2)|0)),v=Math.min(H2-1,Math.max(0,((.5-lat/Math.PI)*H2)|0));
+    const si=(v*W2+u)*4;
+    let r=cd[si],g=cd[si+1],b=cd[si+2];
+    const cu=Math.min(W2-1,Math.max(0,(((uN-offN)%1+1)%1*W2)|0));
+    const a=res.clouds[v*W2+cu];
+    if(a>0){r=r*(1-a)+255*a;g=g*(1-a)+255*a;b=b*(1-a)+255*a}
+    const nx2=nd[si]/127.5-1,ny2=nd[si+1]/127.5-1,nz2=nd[si+2]/127.5-1;
+    const diff=Math.max(0,nx2*Lx+ny2*Ly+nz2*Lz);
+    const light=(.35+.65*dz)*(.6+.5*diff);
+    CTX.fillStyle='rgb('+Math.min(255,r*light)+','+Math.min(255,g*light)+','+Math.min(255,b*light)+')';
+    CTX.fillRect(Math.round(cx+gx),Math.round(cy+gy),1,1);
+  }
+}
 function drawPlanetMap(){
   const n=VIEW.node;
   const mh=Math.max(40,Math.min(H-36,Math.floor((W-24)/2))), mw=mh*2;
@@ -1163,38 +1234,23 @@ function drawPlanetMap(){
   ctx.fillStyle='#39406a';
   for(let g=1;g<12;g++){const x=mx+Math.round(g*mw/12);ctx.fillRect(x,my,1,2);ctx.fillRect(x,my+mh-2,1,2)}
   for(let g=1;g<6;g++){const y=my+Math.round(g*mh/6);ctx.fillRect(mx,y,2,1);ctx.fillRect(mx+mw-2,y,2,1)}
+  if(ANIM)CLOUDOFF+=.25;
+  const below=H-(my+mh);
+  if(below>=40){
+    const gs=Math.min(24,((below-12)/2)|0);
+    drawGlobeInset(res,W-gs-14,my+mh+gs+6,gs);
+  } else if(my>=44){
+    const gs=Math.min(24,((my-14)/2)|0);
+    drawGlobeInset(res,W-gs-14,Math.round(my/2)+2,gs);
+  }
   const st=res.stats;
   const bits=[st.typeLabel.toUpperCase()];
   if(st.ocean>=0)bits.push('OCEAN '+st.ocean+'%');
   if(st.peak>=0)bits.push('PEAK '+st.peak.toFixed(1)+'KM');
   if(st.plates)bits.push(st.plates+' PLATES');
-  if(st.pop)bits.push('POP '+fmtPop(st.pop)+' \u00b7 '+st.count+' SETTLEMENTS');
   text(W/2,H-10,bits.join(' \u00b7 '),'#39406a','center');
-  // settlements: generated data layer
-  const snodes=settlementNodes(n,res);
-  snodes.forEach(s=>{
-    const x=mx+Math.round(s._u/res.W*mw), y=my+Math.round(s._v/res.H*mh);
-    const hot=HOVER===s||SEL===s;
-    const col=hot?'#e9b34e':(s._capital?'#f2e07a':'#e8875a');
-    px(x,y,col);px(x+1,y,col);px(x,y+1,col);px(x+1,y+1,col);
-    if(s._capital){box(x-2,y-2,6,6,col)}
-    if(s._capital||hot){
-      let nm=s.name.toUpperCase();
-      ctx.font='8px Silkscreen, monospace';
-      const w2=Math.ceil(ctx.measureText(nm).width)+4;
-      let lx=x-(w2>>1);lx=Math.max(mx,Math.min(mx+mw-w2,lx));
-      const ly=(y+5<my+mh-12)?y+5:y-14;
-      ctx.fillStyle='rgba(6,7,15,.75)';ctx.fillRect(lx,ly,w2,11);
-      text(lx+2,ly+2,nm,hot?'#e9b34e':'#d8c8a0','left');
-    }
-    ITEMS.push({x,y,r:5,node:s});
-  });
   // markdown locations: GM-authored pins
-  const sites=descendants(n).filter(c=>c.type==='location');
-  sites.forEach(s=>{
-    let sx,sy;
-    if(s.meta.site){const c=s.meta.site.split(/[, ]+/).map(Number);sx=c[0];sy=c[1]}
-    else{[sx,sy]=autoSite(n,s,res)}
+  resolveSites(n,res).forEach(({node:s,sx,sy})=>{
     const x=mx+Math.round(sx/100*mw), y=my+Math.round(sy/100*mh);
     const hot=HOVER===s||SEL===s;
     box(x-2,y-2,4,4,hot?'#e9b34e':'#5ad6d6'); px(x,y,hot?'#e9b34e':'#5ad6d6');
@@ -1449,7 +1505,7 @@ function md(lines){ // tiny inline markdown -> paragraphs
   return paras.map(p=>'<p>'+esc(p).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<i>$1</i>')
     .replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\n/g,' ')+'</p>').join('');
 }
-const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look','site','world','rough','plates','erosion','sea','ice','craters','settlements']);
+const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look','site','world','rough','plates','erosion','sea','ice','craters','clouds','settlements']);
 function renderPanel(){
   const p=document.getElementById('info');
   const n=SEL||VIEW.node;
@@ -1528,7 +1584,10 @@ src.addEventListener('input',()=>{if(!WARDEN)return;clearTimeout(tmr);
 function setStatus(s,err){status.textContent=s;status.className=err?'err':''}
 
 const menu=document.getElementById('menu'), bOpts=document.getElementById('bOpts');
-bOpts.onclick=e=>{e.stopPropagation();menu.classList.toggle('open')};
+bOpts.onclick=e=>{e.stopPropagation();
+  const on=VIEW.level==='planet'&&WORLDS[worldKey(VIEW.node)]&&WORLDS[worldKey(VIEW.node)]!=='pending';
+  document.querySelectorAll('.wexp').forEach(b=>b.style.display=on?'':'none');
+  menu.classList.toggle('open')};
 document.addEventListener('click',e=>{if(!menu.contains(e.target))menu.classList.remove('open')});
 
 const bAnim=document.getElementById('bAnim');
@@ -1553,6 +1612,79 @@ document.getElementById('bCopy').onclick=async()=>{
     catch(e2){setStatus('copy failed \u2014 copy from the Edit tab',true)}
     ta.remove()}
 };
+
+/* ---------- world exports ---------- */
+const CRC_TABLE=(()=>{const t=new Uint32Array(256);for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);t[n]=c>>>0}return t})();
+function crc32(b){let c=0xFFFFFFFF;for(let i=0;i<b.length;i++)c=CRC_TABLE[(c^b[i])&255]^(c>>>8);return (c^0xFFFFFFFF)>>>0}
+function adler32(b){let a=1,bb=0;for(let i=0;i<b.length;i++){a=(a+b[i])%65521;bb=(bb+a)%65521}return ((bb<<16)|a)>>>0}
+function be32(n){return [(n>>>24)&255,(n>>>16)&255,(n>>>8)&255,n&255]}
+function pngChunk(type,data){
+  const tb=[...type].map(ch=>ch.charCodeAt(0)),body=new Uint8Array(tb.length+data.length);
+  body.set(tb,0);body.set(data,tb.length);
+  const out=new Uint8Array(8+body.length);out.set(be32(data.length),0);out.set(body,4);out.set(be32(crc32(body)),4+body.length);
+  return out;
+}
+function encodePNG16Gray(width,height,values01){
+  const rowLen=1+width*2,raw=new Uint8Array(rowLen*height);
+  for(let y=0;y<height;y++){
+    const rs=y*rowLen;raw[rs]=0;
+    for(let x=0;x<width;x++){
+      const v=Math.round(Math.min(1,Math.max(0,values01[y*width+x]))*65535);
+      raw[rs+1+x*2]=v>>8;raw[rs+2+x*2]=v&255;
+    }
+  }
+  const nBlocks=Math.ceil(raw.length/65535),z=new Uint8Array(2+raw.length+nBlocks*5+4);
+  let p=0;z[p++]=0x78;z[p++]=0x01;
+  for(let off=0;off<raw.length;off+=65535){
+    const len=Math.min(65535,raw.length-off);
+    z[p++]=off+len>=raw.length?1:0;z[p++]=len&255;z[p++]=len>>8;z[p++]=(~len)&255;z[p++]=((~len)>>8)&255;
+    z.set(raw.subarray(off,off+len),p);p+=len;
+  }
+  z.set(be32(adler32(raw)),p);
+  const sig=new Uint8Array([0x89,0x50,0x4E,0x47,0x0D,0x0A,0x1A,0x0A]);
+  const ihdr=pngChunk("IHDR",new Uint8Array([...be32(width),...be32(height),16,0,0,0,0]));
+  return new Blob([sig,ihdr,pngChunk("IDAT",z),pngChunk("IEND",new Uint8Array(0))],{type:"image/png"});
+}
+function dlBlob(blob,name){const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1500)}
+function curWorld(){if(VIEW.level!=='planet')return null;const w=worldFor(VIEW.node,true);return w||null}
+function wbase(){return VIEW.node.name.replace(/\s+/g,'_').toLowerCase()}
+function exportGray(arr,W2,H2,name,alphaScale){
+  const c=document.createElement('canvas');c.width=W2;c.height=H2;
+  const img=c.getContext('2d').createImageData(W2,H2),d=img.data;
+  for(let i=0;i<W2*H2;i++){const v=Math.round(Math.min(1,arr[i]*(alphaScale||1))*255),k=i*4;d[k]=d[k+1]=d[k+2]=v;d[k+3]=255}
+  c.getContext('2d').putImageData(img,0,0);
+  c.toBlob(b=>dlBlob(b,name),'image/png');
+}
+function resolveSites(n,res){
+  const out=[];let claim=0;
+  descendants(n).filter(c=>c.type==='location').forEach(s=>{
+    let sx,sy;
+    if(s.meta.site){const c=s.meta.site.split(/[, ]+/).map(Number);sx=c[0];sy=c[1]}
+    else if(res&&res.settlements[claim]){const sp=res.settlements[claim++];sx=sp.u/res.W*100;sy=sp.v/res.H*100}
+    else{[sx,sy]=autoSite(n,s,res)}
+    out.push({node:s,sx,sy});
+  });
+  return out;
+}
+document.getElementById('bXS').onclick=()=>{menu.classList.remove('open');const w=curWorld();if(!w)return setStatus('open a planet map first',true);
+  w.cv.toBlob(b=>dlBlob(b,wbase()+'_surface.png'),'image/png');setStatus('surface exported')};
+document.getElementById('bXH').onclick=()=>{menu.classList.remove('open');const w=curWorld();if(!w)return setStatus('open a planet map first',true);
+  const hgt=new Float32Array(w.W*w.H);
+  for(let i=0;i<hgt.length;i++)hgt[i]=w.hasOcean?Math.max(0,(w.elev[i]-w.sea)/Math.max(1e-4,1-w.sea)):w.elev[i];
+  dlBlob(encodePNG16Gray(w.W,w.H,hgt),wbase()+'_height16.png');setStatus('heightmap exported')};
+document.getElementById('bXN').onclick=()=>{menu.classList.remove('open');const w=curWorld();if(!w)return setStatus('open a planet map first',true);
+  const c=document.createElement('canvas');c.width=w.W;c.height=w.H;
+  c.getContext('2d').putImageData(new ImageData(w.normal,w.W,w.H),0,0);
+  c.toBlob(b=>dlBlob(b,wbase()+'_normal.png'),'image/png');setStatus('normal map exported')};
+document.getElementById('bXC').onclick=()=>{menu.classList.remove('open');const w=curWorld();if(!w)return setStatus('open a planet map first',true);
+  exportGray(w.clouds,w.W,w.H,wbase()+'_clouds.png');setStatus('cloud map exported')};
+document.getElementById('bXJ').onclick=()=>{menu.classList.remove('open');const w=curWorld();if(!w)return setStatus('open a planet map first',true);
+  const sites=resolveSites(VIEW.node,w).map(s=>({name:s.node.name,x_pct:+s.sx.toFixed(2),y_pct:+s.sy.toFixed(2),
+    lat:+((.5-s.sy/100)*180).toFixed(2),lon:+((s.sx/100)*360-180).toFixed(2),
+    pinned:!!s.node.meta.site}));
+  dlBlob(new Blob([JSON.stringify({world:VIEW.node.name,type:worldTypeOf(VIEW.node),
+    projection:'equirectangular',width:w.W,height:w.H,locations:sites},null,2)],{type:'application/json'}),
+    wbase()+'_locations.json');setStatus('locations exported')};
 
 window.addEventListener('hashchange',()=>{
   WARDEN=/warden/i.test(location.hash);
