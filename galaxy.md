@@ -28,11 +28,6 @@ coords: 19, 82
 star: yellow
 jump: Lalande 21185 (2)
 
-### Morisy
-type: planet
-orbit: 3
-pattern: volcanic
-
 ## System: Merak
 coords: 49, 92
 star: yellow
