@@ -28,6 +28,11 @@ coords: 19, 82
 star: yellow
 jump: Lalande 21185 (2)
 
+### Morisy
+type: planet
+orbit: 3
+pattern: volcanic
+
 ## System: Merak
 coords: 49, 92
 star: yellow
@@ -41,6 +46,11 @@ atmosphere: None
 climate: None
 population: 20
 factions: QuantumTek Materials
+
+#### Mining Base Aloha
+type: location
+
+A remote mining asteroid base that has obtained new specimens for further study.
 
 ## System: Megrez
 coords: 49, 72
