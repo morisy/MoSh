@@ -1,4 +1,3 @@
-
 <!doctype html>
 <html lang="en">
 <head>
@@ -187,7 +186,9 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
           <label>At <span class="pair"><input id="aAt" type="number" min="0" max="100" value="40"> %</span></label>
         </div>
         <label class="f-color">Color <select id="aColor"></select></label>
-        <label class="f-pattern">Pattern <select id="aPattern"></select></label>
+        <label class="f-pattern">World type <select id="aPattern"></select></label>
+        <label class="f-setl">Settlements
+          <select id="aSetl"><option value="">auto</option><option value="0">uninhabited</option><option value="1">survey outposts</option><option value="2">frontier colonies</option><option value="3">settled world</option><option value="4">core world</option></select></label>
         <label class="f-rings">Rings <select id="aRings"><option value="">no</option><option value="yes">yes</option></select></label>
         <label class="f-size">Size <input id="aSize" type="number" min="3" max="12" placeholder="auto"></label>
         <label class="f-look">Look <select id="aLook"></select></label>
@@ -215,6 +216,469 @@ ul.kids .t{color:var(--dim);width:70px;flex:none;font-size:15px;text-transform:u
   </aside>
 </div>
 
+
+<script id="worldgen" type="text/worldgen">
+'use strict';
+/* Worldforge generation core (adapted): pure, DOM-free; runs in a worker
+   with an inline fallback. Fixed 512x256 grid so results are identical on
+   every device. The planet name is the seed. */
+function xmur3(str){let h=1779033703^str.length;for(let i=0;i<str.length;i++){h=Math.imul(h^str.charCodeAt(i),3432918353);h=(h<<13)|(h>>>19)}return function(){h=Math.imul(h^(h>>>16),2246822507);h=Math.imul(h^(h>>>13),3266489909);return (h^=h>>>16)>>>0}}
+function mulberry32(a){return function(){a|=0;a=(a+0x6D2B79F5)|0;let t=Math.imul(a^(a>>>15),1|a);t=(t+Math.imul(t^(t>>>7),61|t))^t;return ((t^(t>>>14))>>>0)/4294967296}}
+function latticeHash(x,y,z,s){let h=x*374761393+y*668265263+z*2147483647+s*144665;h=(h^(h>>>13))|0;h=Math.imul(h,1274126177);h=(h^(h>>>16))>>>0;return h/4294967296}
+function smooth(t){return t*t*(3-2*t)}
+function clamp01(v){return v<0?0:v>1?1:v}
+function noise3(x,y,z,s){
+  const xi=Math.floor(x),yi=Math.floor(y),zi=Math.floor(z);
+  const u=smooth(x-xi),v=smooth(y-yi),w=smooth(z-zi);
+  const c000=latticeHash(xi,yi,zi,s),c100=latticeHash(xi+1,yi,zi,s);
+  const c010=latticeHash(xi,yi+1,zi,s),c110=latticeHash(xi+1,yi+1,zi,s);
+  const c001=latticeHash(xi,yi,zi+1,s),c101=latticeHash(xi+1,yi,zi+1,s);
+  const c011=latticeHash(xi,yi+1,zi+1,s),c111=latticeHash(xi+1,yi+1,zi+1,s);
+  const x00=c000+(c100-c000)*u,x10=c010+(c110-c010)*u;
+  const x01=c001+(c101-c001)*u,x11=c011+(c111-c011)*u;
+  const y0=x00+(x10-x00)*v,y1=x01+(x11-x01)*v;
+  return y0+(y1-y0)*w;
+}
+function fbm(x,y,z,s,octaves,lac,gain){
+  let amp=.5,freq=1,sum=0,norm=0;
+  for(let i=0;i<octaves;i++){sum+=amp*noise3(x*freq,y*freq,z*freq,s+i*917);norm+=amp;amp*=gain;freq*=lac}
+  return sum/norm;
+}
+function ridged(x,y,z,s,octaves){
+  let amp=.5,freq=1,sum=0,norm=0;
+  for(let i=0;i<octaves;i++){const n=1-Math.abs(2*noise3(x*freq,y*freq,z*freq,s+i*517)-1);sum+=amp*n*n;norm+=amp;amp*=.5;freq*=2.1}
+  return sum/norm;
+}
+function makeRamp(stops){
+  return function(t){t=clamp01(t);
+    for(let i=1;i<stops.length;i++){
+      if(t<=stops[i][0]){
+        const t0=stops[i-1][0],c0=stops[i-1][1],t1=stops[i][0],c1=stops[i][1];
+        const f=t1===t0?0:(t-t0)/(t1-t0);
+        return [c0[0]+(c1[0]-c0[0])*f,c0[1]+(c1[1]-c0[1])*f,c0[2]+(c1[2]-c0[2])*f];
+      }}
+    return stops[stops.length-1][1];
+  };
+}
+const RAMPS={
+  oceanEarth:makeRamp([[0,[6,16,48]],[.55,[12,44,96]],[.85,[24,84,140]],[1,[60,140,170]]]),
+  oceanWater:makeRamp([[0,[4,10,40]],[.45,[10,40,100]],[.8,[18,90,150]],[1,[110,200,205]]]),
+  moonRock:makeRamp([[0,[42,42,48]],[.4,[82,82,88]],[.7,[122,120,124]],[1,[196,194,198]]]),
+  iceSheet:makeRamp([[0,[70,110,160]],[.35,[140,180,215]],[.65,[200,225,245]],[1,[246,250,255]]]),
+  desertSand:makeRamp([[0,[110,62,40]],[.3,[168,110,62]],[.55,[205,150,90]],[.8,[228,186,126]],[1,[246,224,180]]]),
+  basalt:makeRamp([[0,[16,12,14]],[.5,[44,34,36]],[.8,[74,60,58]],[1,[110,96,90]]]),
+  lava:makeRamp([[0,[120,20,8]],[.5,[220,80,12]],[.8,[255,150,30]],[1,[255,230,150]]]),
+  gasWarm:makeRamp([[0,[122,74,48]],[.25,[176,120,72]],[.5,[224,180,126]],[.75,[240,214,170]],[1,[188,142,96]]]),
+  gasCold:makeRamp([[0,[40,60,110]],[.3,[80,110,170]],[.6,[140,175,215]],[1,[220,235,248]]])
+};
+const BIOMES=[
+  {n:"Ocean",s:null},{n:"Sea ice",s:[222,232,240]},{n:"Ice sheet",s:[236,240,246]},
+  {n:"Tundra",s:[152,146,120]},{n:"Boreal forest",s:[58,88,54]},{n:"Steppe",s:[140,140,80]},
+  {n:"Temperate forest",s:[70,112,56]},{n:"Grassland",s:[128,142,74]},{n:"Desert",s:[208,164,104]},
+  {n:"Savanna",s:[172,152,84]},{n:"Rainforest",s:[36,86,42]},{n:"Alpine",s:[138,134,130]},
+  {n:"Scorched",s:[98,60,44]}
+];
+const B={OCEAN:0,SEAICE:1,ICE:2,TUNDRA:3,BOREAL:4,STEPPE:5,TEMPERATE:6,GRASS:7,DESERT:8,SAVANNA:9,RAINFOREST:10,ALPINE:11,SCORCHED:12};
+function classifyBiome(t,m,h,iceT){
+  if(t<iceT)return B.ICE;
+  if(h>.62)return B.ALPINE;
+  if(t>.96&&m<.25)return B.SCORCHED;
+  if(t<.28)return B.TUNDRA;
+  if(t<.5)return m>.4?B.BOREAL:B.STEPPE;
+  if(t<.72)return m>.5?B.TEMPERATE:(m>.25?B.GRASS:B.DESERT);
+  return m>.55?B.RAINFOREST:(m>.3?B.SAVANNA:B.DESERT);
+}
+const TYPES={
+  earthlike:{label:"Earth-like",ocean:true,ice:true,craters:false,plates:true,erosion:true,biomes:true,temp:r=>Math.round(-5+r()*30)+" \u00b0C"},
+  tidal:{label:"Tidally locked",ocean:true,ice:false,craters:false,plates:true,erosion:true,biomes:true,temp:r=>"\u2212"+Math.round(120+r()*60)+" to "+Math.round(90+r()*80)+" \u00b0C"},
+  waterworld:{label:"Water world",ocean:true,ice:true,craters:false,plates:true,erosion:true,biomes:true,temp:r=>Math.round(2+r()*24)+" \u00b0C"},
+  moon:{label:"Barren rock",ocean:false,ice:false,craters:true,plates:true,erosion:false,biomes:false,temp:r=>Math.round(-180+r()*120)+" \u00b0C"},
+  ice:{label:"Ice world",ocean:false,ice:false,craters:false,plates:true,erosion:true,biomes:false,temp:r=>Math.round(-210+r()*140)+" \u00b0C"},
+  desert:{label:"Desert world",ocean:false,ice:false,craters:false,plates:true,erosion:true,biomes:false,temp:r=>Math.round(20+r()*70)+" \u00b0C"},
+  volcanic:{label:"Volcanic world",ocean:false,ice:false,craters:false,plates:true,erosion:true,biomes:false,temp:r=>Math.round(180+r()*400)+" \u00b0C"},
+  gas:{label:"Gas giant",ocean:false,ice:false,craters:false,plates:false,erosion:false,biomes:false,temp:r=>"\u2212"+Math.round(90+r()*90)+" \u00b0C (cloud tops)"}
+};
+const POP_LEVELS=[
+  {label:"Uninhabited",count:null,pop:null},
+  {label:"Survey outposts",count:[3,8],pop:[200,5e4]},
+  {label:"Frontier colonies",count:[10,25],pop:[5e4,2e6]},
+  {label:"Settled world",count:[40,90],pop:[1e6,5e7]},
+  {label:"Core world",count:[120,260],pop:[5e6,3e8]}
+];
+const HABITABILITY={earthlike:1,tidal:.7,waterworld:.6,desert:.5,ice:.35,moon:.3,volcanic:.2,gas:.15};
+const TYPE_WEIGHTS=[["moon",22],["desert",16],["ice",16],["earthlike",12],["volcanic",10],["waterworld",8],["tidal",8],["gas",8]];
+function weightedPick(rand,pairs){
+  let total=0;for(const p of pairs)total+=p[1];
+  let r=rand()*total;
+  for(const p of pairs){r-=p[1];if(r<=0)return p[0]}
+  return pairs[pairs.length-1][0];
+}
+function deriveSettings(seedStr){
+  const rand=mulberry32(xmur3(seedStr+"|settings")());
+  const type=weightedPick(rand,TYPE_WEIGHTS);
+  const lerp=(a,b)=>a+rand()*(b-a);
+  const hab=HABITABILITY[type];
+  const popRoll=rand()*(.35+hab*.65);
+  const popLevel=popRoll<.18?0:popRoll<.42?1:popRoll<.72?2:popRoll<.9?3:4;
+  return {type,rough:+lerp(.3,.8).toFixed(2),plates:type==="gas"?0:Math.round(lerp(4,16)),
+    erosion:+lerp(.2,.8).toFixed(2),sea:+lerp(.35,.65).toFixed(2),ice:+lerp(.1,.6).toFixed(2),
+    craterDensity:+lerp(.2,.9).toFixed(2),popLevel};
+}
+function makeSettlementName(rand){
+  const A=["New ","Port ","Fort ","","","","Mount ","Cape ","Station ","Camp "];
+  const Bs=["Aster","Bryn","Calder","Dune","Ember","Faron","Gale","Hollis","Isk","Jarl","Kestrel","Loom","Marrow","Nadir","Orrin","Pell","Quill","Rook","Sable","Tarn","Ulm","Vesper","Wren","Yarrow","Zell"];
+  const C=["",""," Landing"," Hollow"," Basin"," Crossing"," Vault"," Ridge"];
+  return A[(rand()*A.length)|0]+Bs[(rand()*Bs.length)|0]+C[(rand()*C.length)|0];
+}
+function makePlates(rand,n){
+  const P=[];
+  for(let i=0;i<n;i++){
+    const z=rand()*2-1,a=rand()*Math.PI*2,r=Math.sqrt(1-z*z);
+    const cx=r*Math.cos(a),cy=r*Math.sin(a),cz=z;
+    let vx=rand()*2-1,vy=rand()*2-1,vz=rand()*2-1;
+    const d=vx*cx+vy*cy+vz*cz;vx-=d*cx;vy-=d*cy;vz-=d*cz;
+    const L=Math.hypot(vx,vy,vz)||1,sp=.4+rand()*.6;
+    const cont=rand()<.45;
+    P.push({cx,cy,cz,vx:vx/L*sp,vy:vy/L*sp,vz:vz/L*sp,cont,base:cont?.52+rand()*.16:.28+rand()*.14});
+  }
+  return P;
+}
+const PR={base:0,w:0,conv:0,cont:false,ocean:false};
+function plateAt(P,x,y,z){
+  let b1=-2,b2=-2,i1=0,i2=0;
+  for(let i=0;i<P.length;i++){const p=P[i],d=x*p.cx+y*p.cy+z*p.cz;
+    if(d>b1){b2=b1;i2=i1;b1=d;i1=i}else if(d>b2){b2=d;i2=i}}
+  const p1=P[i1],p2=P[i2],gap=b1-b2;
+  const t=.5*(1-Math.min(1,gap/.28));
+  PR.base=p1.base*(1-t)+p2.base*t;
+  PR.w=Math.exp(-(gap/.07)*(gap/.07));
+  const dx=p2.cx-p1.cx,dy=p2.cy-p1.cy,dz=p2.cz-p1.cz,L=Math.hypot(dx,dy,dz)||1;
+  PR.conv=Math.max(-1,Math.min(1,((p1.vx-p2.vx)*dx+(p1.vy-p2.vy)*dy+(p1.vz-p2.vz)*dz)/L));
+  PR.cont=p1.cont&&p2.cont;PR.ocean=!p1.cont&&!p2.cont;
+  return PR;
+}
+function makeCraters(rand,density){
+  const n=Math.round(20+density*160),C=[];
+  for(let i=0;i<n;i++){
+    const z=rand()*2-1,a=rand()*Math.PI*2,r=Math.sqrt(1-z*z);
+    C.push({x:r*Math.cos(a),y:r*Math.sin(a),z,rad:.015+Math.pow(rand(),2.2)*.16,depth:.25+rand()*.5});
+  }
+  return C;
+}
+function craterMod(px,py,pz,C){
+  let d=0;
+  for(let i=0;i<C.length;i++){
+    const c=C[i],dot=px*c.x+py*c.y+pz*c.z;
+    if(dot<.98)continue;
+    const ang=Math.acos(Math.min(1,dot));
+    if(ang<c.rad){const t=ang/c.rad;
+      d+=(t*t-1)*c.depth*.12+Math.exp(-Math.pow((t-1)*6,2))*c.depth*.06}
+  }
+  return d;
+}
+function erode(elev,W,H,strength,sea,river,hydro){
+  const N=W*H;
+  const passes=Math.round(strength*3);
+  for(let p=0;p<passes;p++){
+    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+      const i=y*W+x,e=elev[i];
+      if(e<=sea)continue;
+      let lo=e,li=-1;
+      for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;
+        for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;
+          const j=yy*W+((x+dx+W)%W);
+          if(elev[j]<lo){lo=elev[j];li=j}}}
+      if(li>=0){const diff=e-lo;
+        if(diff>.025){const mv=(diff-.025)*.25;elev[i]-=mv;elev[li]+=mv}}
+    }
+  }
+  if(!hydro||strength<=0)return;
+  const flow=new Int32Array(N).fill(-1),acc=new Float32Array(N).fill(1);
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x;let best=elev[i],bi=-1;
+    for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;
+      for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;
+        const j=yy*W+((x+dx+W)%W);
+        if(elev[j]<best){best=elev[j];bi=j}}}
+    flow[i]=bi;
+  }
+  const idx=new Uint32Array(N);for(let i=0;i<N;i++)idx[i]=i;
+  idx.sort((a,b)=>elev[b]-elev[a]);
+  for(let k=0;k<N;k++){const i=idx[k],f=flow[i];if(f>=0)acc[f]+=acc[i]}
+  const K=strength*.035,riverThr=(N/524288)*350;
+  for(let i=0;i<N;i++){
+    if(elev[i]<=sea||flow[i]<0)continue;
+    const slope=elev[i]-elev[flow[i]];
+    const carve=K*Math.min(1,Math.log1p(acc[i])/8)*(.3+slope*20);
+    elev[i]=Math.max(sea+.002,elev[i]-carve);
+    if(river&&acc[i]>riverThr)river[i]=1;
+  }
+}
+function generateWorld(o,progress){
+  const t0=Date.now();
+  const W=o.W,H=o.H,N=W*H,type=o.type,T=TYPES[type];
+  const seedFn=xmur3(o.seedStr+"|"+type);
+  const S=seedFn();const rand=mulberry32(seedFn());
+  const rough=o.rough;
+  const octaves=4+Math.round(rough*4),baseFreq=1.4+rough*2.2,warpAmt=.35+rough*.5;
+  const isGas=type==="gas",isTidal=type==="tidal";
+  let sea=T.ocean?o.sea:-1;
+  const iceT=isTidal?.3:(T.ice?.06+o.ice*.28:0);
+  const latA=new Float32Array(H),cosLatA=new Float32Array(H),sinLatA=new Float32Array(H),absLatA=new Float32Array(H);
+  for(let y=0;y<H;y++){const l=(.5-y/H)*Math.PI;latA[y]=l;cosLatA[y]=Math.cos(l);sinLatA[y]=Math.sin(l);absLatA[y]=Math.abs(l)/(Math.PI/2)}
+  const cosLonA=new Float32Array(W),sinLonA=new Float32Array(W);
+  for(let x=0;x<W;x++){const l=(x/W)*Math.PI*2;cosLonA[x]=Math.cos(l);sinLonA[x]=Math.sin(l)}
+  const plates=(T.plates&&o.plates>0)?makePlates(rand,o.plates):null;
+  const craters=T.craters?makeCraters(rand,o.craterDensity):null;
+  const gasRamp=rand()<.5?RAMPS.gasWarm:RAMPS.gasCold;
+  const bandFreq=6+rand()*8;
+  const tempOffset=(rand()-.5)*.2;
+  const tempLabel=T.temp(rand);
+  progress("Shaping crust");
+  const elev=new Float32Array(N),uplift=new Float32Array(N);
+  for(let y=0;y<H;y++){
+    const cl=cosLatA[y],sl=sinLatA[y],lat=latA[y];
+    for(let x=0;x<W;x++){
+      const i=y*W+x;
+      const px=cl*cosLonA[x],py=cl*sinLonA[x],pz=sl;
+      const wx=fbm(px*1.6+13.7,py*1.6,pz*1.6,S+41,3,2,.5)-.5;
+      const wy=fbm(px*1.6,py*1.6+7.3,pz*1.6,S+79,3,2,.5)-.5;
+      const qx=px*baseFreq+wx*warpAmt,qy=py*baseFreq+wy*warpAmt,qz=pz*baseFreq+(wx+wy)*.5*warpAmt;
+      let e;
+      if(isGas){
+        const turb=(fbm(qx*1.3,qy*1.3,qz*1.3,S+201,5,2.2,.55)-.5)*(.6+rough);
+        const band=Math.sin(lat*bandFreq+turb*5)*.5+.5;
+        const storms=ridged(px*3.2,py*3.2,pz*3.2,S+301,3);
+        e=band*.75+storms*.25;
+      }else{
+        const n=fbm(qx,qy,qz,S,octaves,2.05,.5);
+        if(plates){
+          const fx=fbm(px*4.5+21,py*4.5,pz*4.5,S+151,3,2,.5)-.5;
+          const fy=fbm(px*4.5,py*4.5+17,pz*4.5,S+161,3,2,.5)-.5;
+          let ax=px+wx*.55+fx*.18,ay=py+wy*.55+fy*.18,az=pz+(wx-wy)*.55+(fx-fy)*.18;
+          const al=Math.hypot(ax,ay,az);ax/=al;ay/=al;az/=al;
+          const r=plateAt(plates,ax,ay,az);
+          e=r.base+(n-.5)*.42;
+          if(r.conv>0){
+            const up=r.w*r.conv*(r.cont?.32:r.ocean?.14:.24);
+            e+=up*(.5+ridged(qx*1.4,qy*1.4,qz*1.4,S+901,4)*.9);
+            uplift[i]=up;
+          }else if(r.conv<0){
+            e+=r.w*r.conv*(r.ocean?-.03:.10);
+          }
+        }else{
+          e=n*.8+ridged(qx*1.4,qy*1.4,qz*1.4,S+901,4)*.2;
+        }
+        if(type==="moon"){
+          e+=craterMod(px,py,pz,craters);
+        }else if(type==="desert"){
+          const dunes=Math.sin((qx+qy*.7+qz*.4)*22+e*9)*.5+.5;
+          const canyon=ridged(qx*1.2,qy*1.2,qz*1.2,S+701,4);
+          e=e*.78+dunes*.12+.1-Math.pow(canyon,7)*.5;
+        }
+      }
+      elev[i]=clamp01(e);
+    }
+  }
+  if(type==="waterworld"){
+    const sample=new Float32Array(Math.ceil(N/7));
+    for(let i=0,k=0;i<N;i+=7)sample[k++]=elev[i];
+    sample.sort();
+    sea=sample[Math.floor(sample.length*(.93-.03*(1-rough)))];
+  }
+  const river=new Uint8Array(N);
+  if(T.erosion&&o.erosion>0){
+    progress("Eroding terrain");
+    erode(elev,W,H,o.erosion*(type==="ice"?.4:1),sea,T.biomes?river:null,true);
+  }
+  progress("Modelling climate");
+  const CS=8,cw=Math.ceil(W/CS),ch=Math.ceil(H/CS);
+  let interior=null;
+  if(T.ocean){
+    let mask=new Float32Array(cw*ch),tmp=new Float32Array(cw*ch);
+    for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++){
+      const sy=Math.min(H-1,cy*CS+(CS>>1)),sx=Math.min(W-1,cx*CS+(CS>>1));
+      mask[cy*cw+cx]=elev[sy*W+sx]<sea?1:0;
+    }
+    for(let it=0;it<14;it++){
+      for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++)
+        tmp[cy*cw+cx]=(mask[cy*cw+(cx+cw-1)%cw]+mask[cy*cw+cx]+mask[cy*cw+(cx+1)%cw])/3;
+      for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++){
+        const yu=Math.max(0,cy-1),yd=Math.min(ch-1,cy+1);
+        mask[cy*cw+cx]=(tmp[yu*cw+cx]+tmp[cy*cw+cx]+tmp[yd*cw+cx])/3;
+      }
+    }
+    interior=mask;
+  }
+  const temp=new Float32Array(N),moist=new Float32Array(N),biome=new Uint8Array(N);
+  for(let y=0;y<H;y++){
+    const cl=cosLatA[y],sl=sinLatA[y],aL=absLatA[y];
+    for(let x=0;x<W;x++){
+      const i=y*W+x,e=elev[i];
+      const px=cl*cosLonA[x],py=cl*sinLonA[x],pz=sl;
+      const h=T.ocean?Math.max(0,(e-sea)/Math.max(1e-4,1-sea)):e;
+      const mn=fbm(px*2.3+31,py*2.3,pz*2.3,S+111,4,2,.5);
+      const tn=(fbm(px*3.1,py*3.1,pz*3.1,S+121,3,2,.5)-.5)*.12;
+      const lw=(fbm(px*1.3+50,py*1.3,pz*1.3,S+131,4,2,.5)-.5)*.36;
+      const aLw=clamp01(aL+lw);
+      const rainBand=.5+.5*Math.cos(aLw*3*Math.PI);
+      const inland=interior?1-interior[Math.min(ch-1,y/CS|0)*cw+Math.min(cw-1,x/CS|0)]:.6;
+      let t,m;
+      if(isTidal){
+        const day=-px+lw*1.3;
+        t=clamp01(.5+.5*day*1.15-h*.3+tn*1.5+inland*.05*day);
+        m=clamp01(mn*.5+Math.exp(-(day/.35)*(day/.35))*.45-inland*.2+.1);
+      }else if(isGas){t=e;m=.5}
+      else{
+        const tb={earthlike:1.02,waterworld:1,desert:.95,ice:.18,moon:.6,volcanic:1}[type];
+        const tl={earthlike:1.05,waterworld:1,desert:.5,ice:.2,moon:.5,volcanic:.4}[type];
+        const cont=1+inland*.22;
+        t=clamp01(tb+inland*.03-Math.pow(aLw,1.5)*tl*cont-h*.6+tempOffset+tn);
+        m=clamp01(mn*.55+rainBand*.15+(1-inland)*.3+.05);
+      }
+      temp[i]=t;moist[i]=m;
+      if(T.biomes){
+        if(e<sea)biome[i]=t<iceT?B.SEAICE:B.OCEAN;
+        else biome[i]=classifyBiome(t,m,h,iceT);
+      }
+    }
+  }
+  progress("Painting surface");
+  const color=new Uint8ClampedArray(N*4);
+  let oceanCount=0,peak=0;
+  const oceanRamp=type==="waterworld"?RAMPS.oceanWater:RAMPS.oceanEarth;
+  const shadeK=26*(W/1024);
+  for(let y=0;y<H;y++){
+    const cl=cosLatA[y],sl=sinLatA[y],aL=absLatA[y];
+    for(let x=0;x<W;x++){
+      const i=y*W+x,e=elev[i],t=temp[i],m=moist[i];
+      const px=cl*cosLonA[x],py=cl*sinLonA[x],pz=sl;
+      const qx=px*baseFreq,qy=py*baseFreq,qz=pz*baseFreq;
+      let r,g,b;
+      if(isGas){[r,g,b]=gasRamp(e)}
+      else if(type==="moon"){
+        const mare=fbm(px*1.1+5,py*1.1,pz*1.1,S+501,3,2,.5);
+        [r,g,b]=RAMPS.moonRock(mare>.62?e*.45:e);
+        if(e>peak)peak=e;
+      }
+      else if(type==="ice"){
+        const cracks=Math.pow(ridged(qx*1.6,qy*1.6,qz*1.6,S+601,4),6);
+        [r,g,b]=RAMPS.iceSheet(e*.85+.15);
+        r-=cracks*90;g-=cracks*70;b-=cracks*40;
+        const melt=(1-aL)*.25*(e<.4?1:0);b+=melt*40;g+=melt*15;
+        if(e>peak)peak=e;
+      }
+      else if(type==="desert"){[r,g,b]=RAMPS.desertSand(e);if(e>peak)peak=e}
+      else if(type==="volcanic"){
+        const veins=ridged(qx*1.5,qy*1.5,qz*1.5,S+801,5);
+        [r,g,b]=RAMPS.basalt(e);
+        const glow=Math.pow(veins,8)*(.4+(1-e)*.8);
+        if(glow>.02){
+          const lv=RAMPS.lava(Math.min(1,glow*2.4)),f=Math.min(1,glow*3);
+          r=r*(1-f)+lv[0]*f;g=g*(1-f)+lv[1]*f;b=b*(1-f)+lv[2]*f;
+        }
+        if(e>peak)peak=e;
+      }
+      else{
+        const bi=biome[i];
+        if(e<sea){
+          oceanCount++;
+          [r,g,b]=oceanRamp(e/sea);
+          if(t<iceT+.05){
+            const f=clamp01((iceT+.05-t)/.07)*.95,ic=BIOMES[B.SEAICE].s;
+            r=r*(1-f)+ic[0]*f;g=g*(1-f)+ic[1]*f;b=b*(1-f)+ic[2]*f;
+          }
+        }else{
+          const h=(e-sea)/Math.max(1e-4,1-sea);
+          if(h>peak)peak=h;
+          const c=BIOMES[bi].s,tint=.9+(m-.5)*.16+h*.2;
+          r=c[0]*tint;g=c[1]*tint;b=c[2]*tint;
+          if(bi===B.ALPINE&&(h>.8||t<.35)){const f=.7;r=r*(1-f)+240*f;g=g*(1-f)+243*f;b=b*(1-f)+248*f}
+          if(type==="waterworld"&&h<.1&&bi!==B.ICE){r=214;g=196;b=150}
+          if(river[i]&&t>iceT){const f=.7;r=r*(1-f)+50*f;g=g*(1-f)+100*f;b=b*(1-f)+160*f}
+          if(uplift[i]>.1&&bi!==B.ICE){const f=Math.min(.5,uplift[i]);r=r*(1-f)+120*f;g=g*(1-f)+110*f;b=b*(1-f)+100*f}
+        }
+      }
+      if(!isGas){
+        const eL=elev[y*W+((x-1+W)%W)],eR=elev[y*W+((x+1)%W)];
+        const eU=elev[Math.max(0,y-1)*W+x],eD=elev[Math.min(H-1,y+1)*W+x];
+        const shade=Math.max(-.3,Math.min(.3,((eL-eR)*.7+(eU-eD)*.7)*shadeK));
+        r+=shade*60;g+=shade*60;b+=shade*60;
+      }
+      const k=i*4;
+      color[k]=r;color[k+1]=g;color[k+2]=b;color[k+3]=255;
+    }
+  }
+  progress("Founding settlements");
+  const lv=POP_LEVELS[o.popLevel];
+  const settlements=[];let totalPop=0;
+  if(lv.count){
+    const srand=mulberry32(xmur3(o.seedStr+"|settle|"+type)());
+    const habMul=HABITABILITY[type];
+    const target=Math.max(1,Math.round((lv.count[0]+srand()*(lv.count[1]-lv.count[0]))*habMul));
+    const cands=[],tries=target*12+80,off=Math.max(2,W>>7);
+    for(let k=0;k<tries;k++){
+      const zc=srand()*2-1,a=srand()*Math.PI*2,rr=Math.sqrt(1-zc*zc);
+      const px=rr*Math.cos(a),py=rr*Math.sin(a),pz=zc;
+      const lon=Math.atan2(py,px),u=Math.floor((((lon/(Math.PI*2))%1)+1)%1*W)%W;
+      const v=Math.min(H-1,Math.floor((.5-Math.asin(pz)/Math.PI)*H));
+      const i=v*W+u,e=elev[i],t=temp[i],m=moist[i],aL=absLatA[v];
+      let score=srand()*.15,floating=false;
+      if(isGas){score+=1-Math.abs(aL-.35);floating=true}
+      else if(T.biomes){
+        const bi=biome[i];
+        if(e<sea){
+          if(type!=="waterworld"||bi===B.SEAICE)continue;
+          score+=.3;floating=true;
+        }else{
+          if(bi===B.ICE||bi===B.SCORCHED||bi===B.ALPINE)continue;
+          const h=(e-sea)/Math.max(1e-4,1-sea);
+          score+=(1-h)*.8+(1-Math.abs(t-.6)*2)*.5+m*.3;
+          if(type==="waterworld")score+=1.2;
+          const n1=v*W+((u+off)%W),n2=v*W+((u-off+W)%W),n3=Math.max(0,v-off)*W+u,n4=Math.min(H-1,v+off)*W+u;
+          if(elev[n1]<sea||elev[n2]<sea||elev[n3]<sea||elev[n4]<sea)score+=.45;
+          if(river[i])score+=.3;
+        }
+      }else{
+        score+=1-Math.abs(e-.5)*1.6;
+        if(type==="ice")score+=(1-aL)*.4;
+      }
+      cands.push({px,py,pz,u,v,score,floating});
+    }
+    cands.sort((p,q)=>q.score-p.score);
+    for(const c of cands){
+      if(settlements.length>=target)break;
+      let ok=true;
+      for(const s of settlements){if(c.px*s.px+c.py*s.py+c.pz*s.pz>.9985){ok=false;break}}
+      if(ok)settlements.push(c);
+    }
+    settlements.forEach((s,k)=>{
+      const f=Math.pow(srand(),1.6);
+      s.pop=Math.round((lv.pop[0]+f*(lv.pop[1]-lv.pop[0]))*habMul);
+      if(k===0)s.pop*=3;
+      s.capital=k===0;
+      s.name=makeSettlementName(srand);
+      s.biome=T.biomes?BIOMES[biome[s.v*W+s.u]].n:(isGas?"Aerostat":"Surface");
+      totalPop+=s.pop;
+    });
+  }
+  return {
+    W,H,type,seedStr:o.seedStr,sea,hasOcean:T.ocean,
+    elev,color,biome,river,
+    settlements:settlements.map(s=>({name:s.name,u:s.u,v:s.v,pop:s.pop,capital:s.capital,floating:s.floating,biome:s.biome})),
+    stats:{typeLabel:T.label,plates:plates?plates.length:0,
+      ocean:T.ocean?Math.round(oceanCount/N*100):-1,
+      peak:isGas?-1:(2+peak*24),
+      temp:tempLabel,pop:totalPop,count:settlements.length,ms:Date.now()-t0}
+  };
+}
+if(typeof importScripts==="function"){
+  self.onmessage=function(ev){
+    const res=generateWorld(ev.data,msg=>self.postMessage({progress:msg}));
+    self.postMessage({result:res},[res.elev.buffer,res.color.buffer,res.biome.buffer,res.river.buffer]);
+  };
+}
+</script>
 
 <script>
 /* ================= CONFIG =================
@@ -291,198 +755,82 @@ function fbmFor(name){
     return a};
   FBMC[name]=fn; return fn;
 }
-/* Terrain engine: one deterministic profile per body, shared by globe,
-   map, and preview. Heightfield patterns (ocean/icecaps/desert/volcanic)
-   get plate tectonics with motion, climate, and biomes; the map adds
-   erosion, rivers, and cartographic finish on top of the same field. */
-const PROF={};
-const HFIELD={ocean:1,icecaps:1,desert:1,volcanic:1};
-const RANDPAT=['ocean','bands','icecaps','desert','craters','swirl','spots','volcanic'];
-const PATDEFCOL={desert:'sand',volcanic:'grey',icecaps:'ice'};
-function profileFor(node){
-  const key=node.name+'|'+(node.meta.color||'')+'|'+(node.meta.pattern||'')+'|'+(node.meta.rings||'')+'|'+node.type;
-  if(PROF[key])return PROF[key];
-  if(Object.keys(PROF).length>80)for(const k in PROF)delete PROF[k];
-  const seed=hash(node.name), R=rng(seed);
-  const pat=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:(node.type==='moon'?'craters':RANDPAT[(seed>>>8)%RANDPAT.length]);
-  const pname=PAL[node.meta.color]?node.meta.color:(PATDEFCOL[pat]||PALNAMES[seed%PALNAMES.length]);
-  const rvec=()=>{const a=R()*6.2832,u=R()*2-1,s=Math.sqrt(1-u*u);return [s*Math.cos(a),u,s*Math.sin(a)]};
-  const bestCandidate=(placed,tries,get)=>{
-    let best=null,bd=-1;
-    for(let c=0;c<tries;c++){const v=rvec();
-      let mind=9;for(const q of placed){const p=get(q);const dd=1-(v[0]*p[0]+v[1]*p[1]+v[2]*p[2]);if(dd<mind)mind=dd}
-      if(mind>bd){bd=mind;best=v}}
-    return best};
-  // plates with tangent motion: boundaries classify convergent / divergent
-  const plates=[];
-  const nP=6+Math.floor(R()*8);
-  for(let i=0;i<nP;i++){
-    const c=bestCandidate(plates,8,q=>q.c);
-    let vx=R()*2-1,vy=R()*2-1,vz=R()*2-1;
-    const d=vx*c[0]+vy*c[1]+vz*c[2]; vx-=d*c[0]; vy-=d*c[1]; vz-=d*c[2];
-    const L=Math.hypot(vx,vy,vz)||1, sp=.4+R()*.6;
-    const cont=i===0?true:(i===1?false:R()<.45);
-    plates.push({c,vx:vx/L*sp,vy:vy/L*sp,vz:vz/L*sp,cont,base:cont?.52+R()*.16:.3+R()*.12});
-  }
-  const craters=[];
-  const nC=14+Math.floor(R()*14);
-  for(let i=0;i<nC;i++){
-    const v=bestCandidate(craters,12,q=>q);
-    craters.push([v[0],v[1],v[2],.05+Math.pow(R(),2.2)*.22]);
-  }
-  craters.sort((p,q)=>q[3]-p[3]);
-  const cols=PAL[pname];
-  const P={cols,mapCols:[shade(cols[0],.45),cols[0],cols[1],cols[2],shade(cols[2],1.4)],
-    seaRamp:[shade(cols[0],.4),cols[0],cols[1]],
-    pat,freq:2+R()*3,ph:R()*6.2832,tilt:(R()-.5)*.6,
-    sea:.5+(R()-.5)*.08, iceT:.08+R()*.14, craters, plates,
-    rings:/^(y|yes|true|1)/i.test(node.meta.rings||''),
-    fbm:fbmFor(node.name), height:!!HFIELD[pat]};
-  PROF[key]=P; return P;
+/* ---------- world layer: Worldforge generation, async + cached ---------- */
+const WTYPES=['earthlike','tidal','waterworld','moon','ice','desert','volcanic','gas'];
+const WALIAS={ocean:'earthlike',icecaps:'ice',craters:'moon',bands:'gas',swirl:'gas',spots:'desert',solid:'moon'};
+const GENSRC=document.getElementById('worldgen').textContent;
+const PURE=new Function(GENSRC+'\n;return {deriveSettings,TYPES,POP_LEVELS};')();
+let genWorker=null, inlineGen=null;
+try{genWorker=new Worker(URL.createObjectURL(new Blob([GENSRC],{type:'application/javascript'})))}catch(e){genWorker=null}
+function getInlineGen(){return inlineGen||(inlineGen=new Function(GENSRC+'\n;return generateWorld;')())}
+function worldTypeOf(node){
+  const p=(node.meta.pattern||node.meta.world||'').toLowerCase();
+  if(WTYPES.includes(p))return p;
+  if(WALIAS[p])return WALIAS[p];
+  return node.type==='moon'?'moon':PURE.deriveSettings(node.name).type;
 }
-const PR={base:0,w:0,conv:0,cont:false,oc:false};
-function plateAt(P,x,y,z){
-  const Pl=P.plates;
-  let b1=-2,b2=-2,i1=0,i2=0;
-  for(let i=0;i<Pl.length;i++){const p=Pl[i],d=x*p.c[0]+y*p.c[1]+z*p.c[2];
-    if(d>b1){b2=b1;i2=i1;b1=d;i1=i}else if(d>b2){b2=d;i2=i}}
-  const p1=Pl[i1],p2=Pl[i2],gap=b1-b2;
-  const t=.5*(1-Math.min(1,gap/.28));
-  PR.base=p1.base*(1-t)+p2.base*t;
-  PR.w=Math.exp(-(gap/.07)*(gap/.07));
-  const dx=p2.c[0]-p1.c[0],dy=p2.c[1]-p1.c[1],dz=p2.c[2]-p1.c[2],L=Math.hypot(dx,dy,dz)||1;
-  PR.conv=Math.max(-1,Math.min(1,((p1.vx-p2.vx)*dx+(p1.vy-p2.vy)*dy+(p1.vz-p2.vz)*dz)/L));
-  PR.cont=p1.cont&&p2.cont; PR.oc=!p1.cont&&!p2.cont;
-  return PR;
+function worldOptsFor(node){
+  const d=PURE.deriveSettings(node.name);
+  const num=(k,lo,hi)=>{const v=parseFloat(node.meta[k]);return isNaN(v)?d[k==='craters'?'craterDensity':k]:Math.max(lo,Math.min(hi,v))};
+  let popLevel=d.popLevel;
+  if(node.meta.settlements!==undefined){const v=parseInt(node.meta.settlements);if(!isNaN(v))popLevel=Math.max(0,Math.min(4,v))}
+  return {W:512,H:256,type:worldTypeOf(node),seedStr:node.name,
+    rough:num('rough',0,1),plates:node.meta.plates!==undefined?Math.max(0,Math.min(24,parseInt(node.meta.plates)||0)):d.plates,
+    erosion:num('erosion',0,1),sea:num('sea',0,1),ice:num('ice',0,1),
+    craterDensity:num('craters',0,1),popLevel};
 }
-function elevAt(P,x,y,z,detail){
-  const f=P.fbm, w=.32;
-  const wx=x+w*f(x+11,y,z,2,1.3), wy=y+w*f(x,y+11,z,2,1.3), wz=z+w*f(x,y,z+11,2,1.3);
-  const al=Math.hypot(wx,wy,wz)||1;
-  const r=plateAt(P,wx/al,wy/al,wz/al);
-  let e=r.base+f(wx,wy,wz,detail?5:3,1.5)*.21;
-  if(r.conv>0){
-    const rg=1-Math.abs(f(wx+5,wy,wz,detail?4:3,2.2));
-    e+=r.w*r.conv*(r.cont?.34:(r.oc?.15:.25))*(.5+rg*.9);
-  }else if(r.conv<0){
-    e+=r.w*r.conv*(r.oc?-.05:.12);           // ocean rifts build ridges, land rifts sink
-  }
-  if(P.pat==='desert'){
-    const dune=Math.sin((wx+wy*.7+wz*.4)*22+e*9)*.5+.5;
-    const can=1-Math.abs(f(wx*1.2+3,wy*1.2,wz*1.2,3,1.6));
-    e=e*.8+dune*.08+.06-Math.pow(can,7)*.4;
-  }
-  return Math.max(0,Math.min(1,e));
+const WORLDS={}; let genBusy=false; const genQueue=[];
+function worldKey(node){return JSON.stringify(worldOptsFor(node))}
+function worldFor(node,urgent){
+  const key=worldKey(node);
+  const w=WORLDS[key];
+  if(w&&w!=='pending')return w;
+  if(w!=='pending'){WORLDS[key]='pending';
+    if(urgent)genQueue.unshift([key,node]);else genQueue.push([key,node]);
+    pumpGen();}
+  return null;
 }
-function climAt(P,x,y,z,h,inland){
-  const f=P.fbm;
-  const aL=Math.abs(Math.asin(Math.max(-1,Math.min(1,y))))/1.5708;
-  const aLw=Math.max(0,Math.min(1,aL+f(x*1.3+50,y*1.3,z*1.3,3,1)*.18));
-  const t=Math.max(0,Math.min(1,1.02-Math.pow(aLw,1.5)*(1+inland*.2)-h*.6+f(x*3.1,y*3.1,z*3.1,2,1)*.06));
-  const m=Math.max(0,Math.min(1,.5+f(x*2.3+31,y*2.3,z*2.3,3,1)*.3+Math.cos(aLw*9.4248)*.12-inland*.22));
-  return [t,m];
+function pumpGen(){
+  if(genBusy||!genQueue.length)return;
+  genBusy=true;
+  const [key,node]=genQueue.shift();
+  const opts=worldOptsFor(node);
+  const done=res=>{
+    // canvas from the color buffer
+    const c=document.createElement('canvas');c.width=res.W;c.height=res.H;
+    c.getContext('2d').putImageData(new ImageData(res.color,res.W,res.H),0,0);
+    res.cv=c; res._snodes=null;
+    WORLDS[key]=res; genBusy=false;
+    if(VIEW.level==='planet'||VIEW.level==='system')draw();
+    pumpGen();
+  };
+  const prog=m=>{if(VIEW.level==='planet')setStatus(m+'\u2026')};
+  if(genWorker){
+    genWorker.onmessage=ev=>{if(ev.data.progress)prog(ev.data.progress);else{setStatus('');done(ev.data.result)}};
+    genWorker.onerror=()=>{genWorker=null;done(getInlineGen()(opts,prog));setStatus('')};
+    genWorker.postMessage(opts);
+  }else setTimeout(()=>{done(getInlineGen()(opts,prog));setStatus('')},10);
 }
-const BIO={
-  ICE:PAL.ice, TUN:PAL.bone, BOR:PAL.moss, TEM:PAL.jade,
-  RAIN:[shade(PAL.jade[0],.7),PAL.jade[0],PAL.jade[1]],
-  GRA:PAL.ochre, DES:PAL.sand, SAV:PAL.amber, ALP:PAL.grey, SCO:PAL.blood
-};
-function biomeRamp(P,t,m,h){
-  if(t<P.iceT)return BIO.ICE;
-  if(h>.62)return BIO.ALP;
-  if(t>.96&&m<.25)return BIO.SCO;
-  if(t<.28)return BIO.TUN;
-  if(t<.5)return m>.4?BIO.BOR:BIO.GRA;
-  if(t<.72)return m>.5?BIO.TEM:(m>.25?BIO.GRA:BIO.DES);
-  return m>.55?BIO.RAIN:(m>.3?BIO.SAV:BIO.DES);
+function fmtPop(n){
+  if(n>=1e9)return (n/1e9).toFixed(1)+'B';
+  if(n>=1e6)return (n/1e6).toFixed(1)+'M';
+  if(n>=1e3)return Math.round(n/1e3)+'K';
+  return String(n);
 }
-/* Surface for heightfield patterns: elevation (+optional erosion result),
-   climate, biome -> a 3-tone ramp and a value inside it.
-   land: 0 water/ice-sea, 1 land, 2 river */
-function surfaceAt(P,x,y,z,detail,eIn,inland,river){
-  const e=eIn!==undefined?eIn:elevAt(P,x,y,z,detail);
-  if(P.pat==='ocean'){
-    if(river)return {ramp:P.seaRamp,v:.6,land:2,e};
-    if(e<P.sea){
-      const [t0]=climAt(P,x,y,z,0,0);
-      if(t0<P.iceT+.04)return {ramp:BIO.ICE,v:.85,land:0,e};
-      return {ramp:P.seaRamp,v:.15+.75*Math.max(0,Math.min(1,1-(P.sea-e)*3.2)),land:0,e};
-    }
-    const hgt=(e-P.sea)/Math.max(1e-4,1-P.sea);
-    const [t,m]=climAt(P,x,y,z,hgt,inland);
-    return {ramp:biomeRamp(P,t,m,hgt),v:.22+.72*Math.min(1,Math.pow(hgt*2.2,1.1)),land:1,e};
-  }
-  if(P.pat==='icecaps'){
-    const crack=Math.pow(1-Math.abs(P.fbm(x*1.6,y*1.6,z*1.6,detail?4:3,1.6)),6);
-    if(crack>.42)return {ramp:P.cols,v:.06,land:1,e};
-    return {ramp:P.cols,v:.3+.62*e,land:1,e};
-  }
-  if(P.pat==='volcanic'){
-    const vein=Math.pow(1-Math.abs(P.fbm(x*1.5+2,y*1.5,z*1.5,detail?5:3,2)),8)*(.4+(1-e)*.8);
-    if(vein>.22)return {ramp:PAL.amber,v:Math.min(1,vein*1.8),land:1,e,glow:1};
-    return {ramp:P.cols,v:.12+.6*e,land:1,e};
-  }
-  // desert
-  return {ramp:P.cols,v:.15+.78*e,land:1,e};
+/* settlement layer: generated data exposed as selectable pseudo-nodes */
+function settlementNodes(node,res){
+  if(res._snodes)return res._snodes;
+  res._snodes=res.settlements.map(s=>({
+    depth:9,type:'settlement',name:s.name,parent:node,children:[],line:-1,
+    id:node.id+'//'+s.name,
+    meta:{population:fmtPop(s.pop),biome:s.biome,status:s.capital?'capital':(s.floating?'floating':'surface')},
+    desc:['Generated settlement on '+node.name+'.'],gm:[],people:[],objects:[],
+    _u:s.u,_v:s.v,_capital:s.capital,_pop:s.pop
+  }));
+  return res._snodes;
 }
-function terrainValue(P,x,y,z,detail){  // legacy flat patterns
-  const f=P.fbm;
-  switch(P.pat){
-    case 'bands': return .5+.45*Math.sin(y*P.freq*2+P.ph+f(x,y,z,3,2)*1.2);
-    case 'swirl': {const lon=Math.atan2(z,x);
-      return .5+.45*Math.sin(y*P.freq*1.5+lon*2+f(x,y,z,3,2)*2.6+P.ph)}
-    case 'spots': {
-      const wx=x+.4*f(x+11,y,z,2,1.2), wy=y+.4*f(x,y+11,z,2,1.2), wz=z+.4*f(x,y,z+11,2,1.2);
-      const v=f(wx,wy,wz,3,1.5)>.08?.74:.32;
-      return v+.03*f(wx+9,wy,wz,2,5)}
-    case 'craters': {
-      let v=f(x,y,z,2,1.1)>.14?.28:.5;
-      v+=.02*f(x+5,y,z,2,4);
-      for(const c of P.craters){const d=Math.acos(Math.max(-1,Math.min(1,x*c[0]+y*c[1]+z*c[2])));
-        if(d<c[3])v=d<c[3]*.78?.06:.97}
-      return v}
-    default: {
-      const wx=x+.3*f(x+11,y,z,2,1.2), wy=y+.3*f(x,y+11,z,2,1.2), wz=z+.3*f(x,y,z+11,2,1.2);
-      return (f(wx,wy,wz,2,1.4)>.22?.29:.5)+.02*f(wx+4,wy,wz,2,6)}
-  }
-}
-/* Erosion (map only): thermal creep + steepest-descent flow accumulation,
-   carving valleys and extracting rivers. Ported from grid-based generators. */
-function erodeGrid(elev,W,H,sea,river){
-  const N=W*H;
-  for(let p=0;p<2;p++){
-    for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-      const i=y*W+x, e=elev[i];
-      if(sea>=0&&e<=sea)continue;
-      let lo=e,li=-1;
-      for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;
-        for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;
-          const j=yy*W+((x+dx+W)%W);
-          if(elev[j]<lo){lo=elev[j];li=j}}}
-      if(li>=0){const diff=e-lo;
-        if(diff>.025){const mv=(diff-.025)*.25;elev[i]-=mv;elev[li]+=mv}}
-    }
-  }
-  const flow=new Int32Array(N).fill(-1), acc=new Float32Array(N).fill(1);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    const i=y*W+x;let best=elev[i],bi=-1;
-    for(let dy=-1;dy<=1;dy++){const yy=y+dy;if(yy<0||yy>=H)continue;
-      for(let dx=-1;dx<=1;dx++){if(!dx&&!dy)continue;
-        const j=yy*W+((x+dx+W)%W);
-        if(elev[j]<best){best=elev[j];bi=j}}}
-    flow[i]=bi;
-  }
-  const idx=new Uint32Array(N);for(let i=0;i<N;i++)idx[i]=i;
-  idx.sort((a,b)=>elev[b]-elev[a]);
-  for(let k=0;k<N;k++){const i=idx[k],fl=flow[i];if(fl>=0)acc[fl]+=acc[i]}
-  const riverThr=(N/524288)*350;
-  for(let i=0;i<N;i++){
-    if((sea>=0&&elev[i]<=sea)||flow[i]<0)continue;
-    const slope=elev[i]-elev[flow[i]];
-    elev[i]=Math.max((sea>=0?sea:0)+.002,elev[i]-.02*Math.min(1,Math.log1p(acc[i])/8)*(.3+slope*20));
-    if(river&&acc[i]>riverThr)river[i]=1;
-  }
-}
+const PLACEHOLDER={earthlike:['#12305c','#2f8a5c'],tidal:['#5a1c10','#c8861a'],waterworld:['#0a2050','#1f9aa8'],
+  moon:['#2a2a2e','#8f8a7c'],ice:['#3a4f7a','#c8dcf0'],desert:['#6b4a20','#c8a060'],volcanic:['#1a1214','#8f1f1f'],gas:['#5c3d10','#ecc768']};
 const BAYER=[[0,8,2,10],[12,4,14,6],[3,11,1,9],[15,7,13,5]];
 
 /* ---------- parser ---------- */
@@ -588,35 +936,47 @@ function starfield(seed,density=0.004){
   for(let i=0;i<n;i++){const v=r();px(r()*W,r()*H,v>.9?'#8892b8':v>.6?'#3a4470':'#1e2444')}
 }
 
-function drawPlanet(cx,cy,r,node){
-  const P=profileFor(node);
-  const ringCols=[P.cols[0],P.cols[1],P.cols[2]];
+function drawPlanet(cx,cy,r,node,peek){
+  const wt=worldTypeOf(node);
+  const seed=hash(node.name), tilt=((seed>>4)%100/100-.5)*.6;
+  const rings=/^(y|yes|true|1)/i.test(node.meta.rings||'');
+  const cached=WORLDS[worldKey(node)];
+  const wr=peek?(cached&&cached!=='pending'?cached:null):worldFor(node);
+  const pc=PLACEHOLDER[wt]||PLACEHOLDER.moon;
+  const ringCols=[shade(pc[1],.5),pc[1],shade(pc[1],1.4)];
   const ringPass=front=>{
-    if(!P.rings)return;
+    if(!rings)return;
     for(let a=0;a<628;a++){const t=a/100;
-      const x=Math.cos(t)*r*1.75, y=Math.sin(t)*r*.28+x*P.tilt*.3;
+      const x=Math.cos(t)*r*1.75, y=Math.sin(t)*r*.28+x*tilt*.3;
       if(front?y<0:y>=0)continue;
       if(x*x/(r*r)+y*y/(r*r)<1&&front)continue;
-      const band=Math.floor((Math.abs(Math.sin(t*1.1))*3))%3;
       if(((a*7)&5)===0)continue;
-      px(cx+x,cy+y,ringCols[band]);}
+      px(cx+x,cy+y,ringCols[Math.floor((Math.abs(Math.sin(t*1.1))*3))%3]);}
   };
   ringPass(false);
   const rr=r+.5;
+  const rot=(ANIM?performance.now()/20000:0)+(seed%628)/100;
+  const cr=Math.cos(rot), sr=Math.sin(rot);
+  let cd=null;
+  if(wr){if(!wr._px)wr._px=wr.cv.getContext('2d').getImageData(0,0,wr.W,wr.H).data;cd=wr._px}
   for(let y=-r;y<=r;y++)for(let x=-r;x<=r;x++){
     if(x*x+y*y>rr*rr)continue;
     const nx=x/r, ny=y/r, nz=Math.sqrt(Math.max(0,1-nx*nx-ny*ny));
-    const light=(-nx*.55-ny*.45+nz*.7);
-    let ramp=P.cols, v;
-    if(P.height){
-      const s=surfaceAt(P,nx,ny,nz,false,undefined,.4,0);
-      ramp=s.ramp; v=s.v;
-    } else v=terrainValue(P,nx,ny,nz,false);
-    v=Math.max(0,Math.min(1,v*.55+light*.55));
-    px(cx+x,cy+y,dith(cx+x,cy+y,v,ramp));
+    const light=Math.max(.25,Math.min(1.15,.45+(-nx*.4-ny*.3+nz*.55)));
+    if(cd){
+      const X=nx*cr+nz*sr, Z=-nx*sr+nz*cr;
+      const lat=Math.asin(Math.max(-1,Math.min(1,-ny))), lon=Math.atan2(X,Z);
+      const u=Math.min(wr.W-1,Math.max(0,((lon/6.2832+.5)*wr.W)|0));
+      const v=Math.min(wr.H-1,Math.max(0,((.5-lat/Math.PI)*wr.H)|0));
+      const k=(v*wr.W+u)*4;
+      CTX.fillStyle='rgb('+Math.min(255,cd[k]*light)+','+Math.min(255,cd[k+1]*light)+','+Math.min(255,cd[k+2]*light)+')';
+      CTX.fillRect(Math.round(cx+x),Math.round(cy+y),1,1);
+    }else{
+      px(cx+x,cy+y,dith(cx+x,cy+y,Math.max(0,Math.min(1,light-.2)),[pc[0],pc[1],shade(pc[1],1.35)]));
+    }
   }
   ringPass(true);
-  node._cols=P.cols;
+  node._cols=[pc[0],pc[1],pc[1]];
 }
 
 /* ---------- sprites ---------- */
@@ -761,150 +1121,80 @@ function drawGalaxy(){
   });
   if(!ROOT.children.length)text(W/2,H/2,WARDEN?'EMPTY GALAXY \u2014 USE ADD OR OPEN A FILE':'EMPTY GALAXY',"#5e6a94",'center');
 }
-let MAPCACHE={key:null,cv:null,stats:''};
-function bandOf(v,ramp){return Math.max(0,Math.min(ramp.length-1,Math.round(v*(ramp.length-1))))}
-function buildHeightMapCanvas(P,mw,mh){
-  const N=mw*mh;
-  const dirX=new Float32Array(N),dirY=new Float32Array(N),dirZ=new Float32Array(N);
-  const elev=new Float32Array(N);
-  for(let y=0;y<mh;y++){
-    const lat=((y+.5)/mh-.5)*Math.PI, cl=Math.cos(lat), sy=Math.sin(lat);
-    for(let x=0;x<mw;x++){
-      const lon=((x+.5)/mw-.5)*6.2832, i=y*mw+x;
-      dirX[i]=cl*Math.cos(lon); dirY[i]=sy; dirZ[i]=cl*Math.sin(lon);
-      elev[i]=elevAt(P,dirX[i],dirY[i],dirZ[i],true);
-    }}
-  const isOcean=P.pat==='ocean';
-  const river=isOcean?new Uint8Array(N):null;
-  erodeGrid(elev,mw,mh,isOcean?P.sea:-1,river);
-  // continentality: blurred low-res ocean mask (1 near sea, 0 deep inland)
-  let inland=null,cw=0,ch=0;
-  if(isOcean){
-    const CS=8; cw=Math.ceil(mw/CS); ch=Math.ceil(mh/CS);
-    let mask=new Float32Array(cw*ch), tmp=new Float32Array(cw*ch);
-    for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++){
-      const sy2=Math.min(mh-1,cy*CS+(CS>>1)), sx=Math.min(mw-1,cx*CS+(CS>>1));
-      mask[cy*cw+cx]=elev[sy2*mw+sx]<P.sea?1:0;
-    }
-    for(let it=0;it<12;it++){
-      for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++)
-        tmp[cy*cw+cx]=(mask[cy*cw+(cx+cw-1)%cw]+mask[cy*cw+cx]+mask[cy*cw+(cx+1)%cw])/3;
-      for(let cy=0;cy<ch;cy++)for(let cx=0;cx<cw;cx++){
-        const yu=Math.max(0,cy-1),yd=Math.min(ch-1,cy+1);
-        mask[cy*cw+cx]=(tmp[yu*cw+cx]+tmp[cy*cw+cx]+tmp[yd*cw+cx])/3;
-      }
-    }
-    inland=mask;
-  }
-  const oc=document.createElement('canvas');oc.width=mw;oc.height=mh;
-  const og=oc.getContext('2d'), old=CTX; CTX=og;
-  const vA=new Float32Array(N), landA=new Uint8Array(N), rampA=new Array(N);
-  let oceanCount=0, peak=0;
-  for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
-    const i=y*mw+x;
-    const inl=inland?1-inland[Math.min(ch-1,(y/8)|0)*cw+Math.min(cw-1,(x/8)|0)]:.5;
-    const s=surfaceAt(P,dirX[i],dirY[i],dirZ[i],true,elev[i],inl,river?river[i]:0);
-    vA[i]=s.v; landA[i]=s.land; rampA[i]=s.ramp;
-    if(s.land!==1)oceanCount++;
-    else{const hgt=isOcean?(s.e-P.sea)/Math.max(1e-4,1-P.sea):s.e; if(hgt>peak)peak=hgt}
-    px(x,y,s.land===2?s.ramp[1]:dith(x,y,s.v,s.ramp,.4));
-  }
-  // cartographic finish: NW hillshade on land, ink outlines on water edges
-  for(let y=1;y<mh;y++)for(let x=0;x<mw;x++){
-    const i=y*mw+x; if(landA[i]!==1)continue;
-    const iul=(y-1)*mw+((x-1+mw)%mw);
-    if(landA[iul]===1&&bandOf(vA[i],rampA[i])>bandOf(vA[iul],rampA[iul]))
-      px(x,y,rampA[i][Math.min(rampA[i].length-1,bandOf(vA[i],rampA[i])+1)]);
-  }
-  if(isOcean)for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
-    const i=y*mw+x; if(landA[i]!==1)continue;
-    if((y>0&&landA[i-mw]!==1)||(y<mh-1&&landA[i+mw]!==1)||
-       landA[y*mw+((x+1)%mw)]!==1||landA[y*mw+((x-1+mw)%mw)]!==1)px(x,y,rampA[i][0]);
-  }
-  CTX=old;
-  const stats=(isOcean?'OCEAN '+Math.round(100*oceanCount/N)+'% \u00b7 ':'')+
-    'PEAK '+(2+peak*24).toFixed(1)+'KM \u00b7 '+P.plates.length+' PLATES';
-  return {cv:oc,stats};
-}
-function buildFlatMapCanvas(P,mw,mh){
-  const oc=document.createElement('canvas');oc.width=mw;oc.height=mh;
-  const og=oc.getContext('2d'), old=CTX; CTX=og;
-  const vA=new Float32Array(mw*mh);
-  for(let y=0;y<mh;y++){
-    const lat=((y+.5)/mh-.5)*Math.PI, cl=Math.cos(lat), sy=Math.sin(lat);
-    for(let x=0;x<mw;x++){
-      const lon=((x+.5)/mw-.5)*6.2832;
-      const v=Math.max(0,Math.min(1,terrainValue(P,cl*Math.cos(lon),sy,cl*Math.sin(lon),true)));
-      vA[y*mw+x]=v;
-      px(x,y,dith(x,y,v,P.mapCols,.4));
-    }}
-  const MT={spots:.5,craters:.37,solid:.42}[P.pat];
-  if(MT!==undefined){
-    const B=i=>Math.max(0,Math.min(4,Math.round(vA[i]*4)));
-    for(let y=1;y<mh;y++)for(let x=0;x<mw;x++){
-      const i=y*mw+x; if(vA[i]<=MT)continue;
-      const iul=(y-1)*mw+((x-1+mw)%mw);
-      if(B(i)>B(iul))px(x,y,P.mapCols[Math.min(4,B(i)+1)]);
-    }
-    for(let y=0;y<mh;y++)for(let x=0;x<mw;x++){
-      const i=y*mw+x; if(vA[i]<=MT)continue;
-      if((y>0&&vA[i-mw]<=MT)||(y<mh-1&&vA[i+mw]<=MT)||
-         vA[y*mw+((x+1)%mw)]<=MT||vA[y*mw+((x-1+mw)%mw)]<=MT)px(x,y,P.mapCols[0]);
-    }
-  }
-  CTX=old;
-  return {cv:oc,stats:''};
-}
-/* auto site placement: score hashed candidates with the same pointwise
-   functions on every device — land, mild climate, near a coast */
-function autoSite(P,s){
-  if(!P.height){return [hash(s.name+'sx')%100,10+hash(s.name+'sy')%80]}
-  let bx=hash(s.name+'sx')%100, by=10+hash(s.name+'sy')%80, bs=-1e9;
-  for(let k=0;k<20;k++){
-    const sx=hash(s.name+'sc'+k)%1000/10, sy2=5+hash(s.name+'sd'+k)%900/10;
-    const lat=(sy2/100-.5)*Math.PI, lon=(sx/100-.5)*6.2832, cl=Math.cos(lat);
-    const X=cl*Math.cos(lon), Y=Math.sin(lat), Z=cl*Math.sin(lon);
-    const e=elevAt(P,X,Y,Z,false);
-    let score=(hash(s.name+'sj'+k)%100)/500;
-    if(P.pat==='ocean'){
-      if(e<P.sea)score-=2;
+let MAPCACHE={key:null};
+function autoSite(node,s,res){
+  // deterministic scoring on the fixed 512x256 grids
+  if(!res)return [hash(s.name+'sx')%100,10+hash(s.name+'sy')%80];
+  const W=res.W,H=res.H;
+  let bu=(hash(s.name+'sx')%100)/100*W|0, bv=(10+hash(s.name+'sy')%80)/100*H|0, bs=-1e9;
+  for(let k=0;k<24;k++){
+    const u=hash(s.name+'sc'+k)%W, v=(H*.06+hash(s.name+'sd'+k)%(H*.88))|0, i=v*W+u;
+    let sc=(hash(s.name+'sj'+k)%100)/500;
+    if(res.hasOcean){
+      if(res.elev[i]<res.sea)sc-=2;
       else{
-        const hgt=(e-P.sea)/Math.max(1e-4,1-P.sea);
-        const [t,m]=climAt(P,X,Y,Z,hgt,.4);
-        if(t<P.iceT)score-=1.5;
-        score+=(1-hgt)*.8+(1-Math.abs(t-.6)*2)*.5+m*.3;
-        for(const [dx,dy] of [[.06,0],[-.06,0],[0,.06],[0,-.06]]){
-          const la2=lat+dy, lo2=lon+dx, c2=Math.cos(la2);
-          if(elevAt(P,c2*Math.cos(lo2),Math.sin(la2),c2*Math.sin(lo2),false)<P.sea){score+=.45;break}
-        }
+        const bi=res.biome[i];
+        if(bi===2||bi===11||bi===12)sc-=1.2;
+        sc+=(1-(res.elev[i]-res.sea)/Math.max(1e-4,1-res.sea))*.8;
+        const off=4;
+        if(res.elev[v*W+((u+off)%W)]<res.sea||res.elev[v*W+((u-off+W)%W)]<res.sea||
+           res.elev[Math.max(0,v-off)*W+u]<res.sea||res.elev[Math.min(H-1,v+off)*W+u]<res.sea)sc+=.45;
+        if(res.river[i])sc+=.3;
       }
-    } else score+=1-Math.abs(e-.5)*1.6;
-    if(score>bs){bs=score;bx=sx;by=sy2}
+    } else sc+=1-Math.abs(res.elev[i]-.5)*1.6;
+    if(sc>bs){bs=sc;bu=u;bv=v}
   }
-  return [bx,by];
+  return [bu/W*100,bv/H*100];
 }
 function drawPlanetMap(){
-  const n=VIEW.node, P=profileFor(n);
+  const n=VIEW.node;
   const mh=Math.max(40,Math.min(H-36,Math.floor((W-24)/2))), mw=mh*2;
   const mx=Math.round((W-mw)/2), my=Math.round((H-mh)/2)+4;
-  const key=n.id+'|'+(n.meta.color||'')+'|'+(n.meta.pattern||'')+'|'+mw+'x'+mh;
-  if(MAPCACHE.key!==key){
-    const built=(P.height?buildHeightMapCanvas:buildFlatMapCanvas)(P,mw,mh);
-    MAPCACHE={key,cv:built.cv,stats:built.stats};
-  }
-  ctx.drawImage(MAPCACHE.cv,mx,my);
+  const res=worldFor(n,true);
   box(mx-1,my-1,mw+2,mh+2,'#26305a');
+  text(W/2,4,n.name.toUpperCase(),'#5e6a94','center');
+  if(!res){
+    text(W/2,Math.round(H/2),'GENERATING TERRAIN\u2026','#5e6a94','center');
+    ITEMS.length=0;
+    return;
+  }
+  ctx.imageSmoothingEnabled=false;
+  ctx.drawImage(res.cv,mx,my,mw,mh);
   ctx.fillStyle='#39406a';
   for(let g=1;g<12;g++){const x=mx+Math.round(g*mw/12);ctx.fillRect(x,my,1,2);ctx.fillRect(x,my+mh-2,1,2)}
   for(let g=1;g<6;g++){const y=my+Math.round(g*mh/6);ctx.fillRect(mx,y,2,1);ctx.fillRect(mx+mw-2,y,2,1)}
-  text(W/2,4,n.name.toUpperCase(),'#5e6a94','center');
-  if(P.pat==='bands'||P.pat==='swirl')text(W/2,H-10,'NO SOLID SURFACE \u2014 ATMOSPHERIC CHART','#39406a','center');
-  else if(MAPCACHE.stats)text(W/2,H-10,MAPCACHE.stats,'#39406a','center');
+  const st=res.stats;
+  const bits=[st.typeLabel.toUpperCase()];
+  if(st.ocean>=0)bits.push('OCEAN '+st.ocean+'%');
+  if(st.peak>=0)bits.push('PEAK '+st.peak.toFixed(1)+'KM');
+  if(st.plates)bits.push(st.plates+' PLATES');
+  if(st.pop)bits.push('POP '+fmtPop(st.pop)+' \u00b7 '+st.count+' SETTLEMENTS');
+  text(W/2,H-10,bits.join(' \u00b7 '),'#39406a','center');
+  // settlements: generated data layer
+  const snodes=settlementNodes(n,res);
+  snodes.forEach(s=>{
+    const x=mx+Math.round(s._u/res.W*mw), y=my+Math.round(s._v/res.H*mh);
+    const hot=HOVER===s||SEL===s;
+    const col=hot?'#e9b34e':(s._capital?'#f2e07a':'#e8875a');
+    px(x,y,col);px(x+1,y,col);px(x,y+1,col);px(x+1,y+1,col);
+    if(s._capital){box(x-2,y-2,6,6,col)}
+    if(s._capital||hot){
+      let nm=s.name.toUpperCase();
+      ctx.font='8px Silkscreen, monospace';
+      const w2=Math.ceil(ctx.measureText(nm).width)+4;
+      let lx=x-(w2>>1);lx=Math.max(mx,Math.min(mx+mw-w2,lx));
+      const ly=(y+5<my+mh-12)?y+5:y-14;
+      ctx.fillStyle='rgba(6,7,15,.75)';ctx.fillRect(lx,ly,w2,11);
+      text(lx+2,ly+2,nm,hot?'#e9b34e':'#d8c8a0','left');
+    }
+    ITEMS.push({x,y,r:5,node:s});
+  });
+  // markdown locations: GM-authored pins
   const sites=descendants(n).filter(c=>c.type==='location');
   sites.forEach(s=>{
     let sx,sy;
     if(s.meta.site){const c=s.meta.site.split(/[, ]+/).map(Number);sx=c[0];sy=c[1]}
-    else{[sx,sy]=autoSite(P,s)}
+    else{[sx,sy]=autoSite(n,s,res)}
     const x=mx+Math.round(sx/100*mw), y=my+Math.round(sy/100*mh);
     const hot=HOVER===s||SEL===s;
     box(x-2,y-2,4,4,hot?'#e9b34e':'#5ad6d6'); px(x,y,hot?'#e9b34e':'#5ad6d6');
@@ -1159,7 +1449,7 @@ function md(lines){ // tiny inline markdown -> paragraphs
   return paras.map(p=>'<p>'+esc(p).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>').replace(/\*(.+?)\*/g,'<i>$1</i>')
     .replace(/\[(.+?)\]\((https?:[^)]+)\)/g,'<a href="$2" target="_blank" rel="noopener">$1</a>').replace(/\n/g,' ')+'</p>').join('');
 }
-const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look','site']);
+const HIDDEN=new Set(['coords','type','orbit','color','pattern','rings','jump','star','size','look','site','world','rough','plates','erosion','sea','ice','craters','settlements']);
 function renderPanel(){
   const p=document.getElementById('info');
   const n=SEL||VIEW.node;
@@ -1168,8 +1458,11 @@ function renderPanel(){
   const rows=[];
   if(n.meta.star)rows.push(['star',n.meta.star]);
   if(n.meta.jump)rows.push(['jumps',n.meta.jump]);
-  if(n.type==='planet'||n.type==='moon'){const c=n._cols||PAL[n.meta.color]||PAL[PALNAMES[hash(n.name)%PALNAMES.length]];
-    rows.push(['look','<span class="sw" style="background:'+c[1]+'"></span>'+esc(n.meta.pattern||'')+(/^(y|yes|true|1)/i.test(n.meta.rings||'')?' · rings':'')])}
+  if(n.type==='planet'||n.type==='moon'){
+    rows.push(['world',esc(PURE.TYPES[worldTypeOf(n)].label)+(/^(y|yes|true|1)/i.test(n.meta.rings||'')?' · rings':'')]);
+    const wr=WORLDS[worldKey(n)];
+    if(wr&&wr!=='pending'&&wr.stats.pop)rows.push(['settled',fmtPop(wr.stats.pop)+' · '+wr.stats.count+' settlements']);
+  }
   for(const k in n.meta)if(!HIDDEN.has(k))rows.push([k,esc(n.meta[k])]);
   if(rows.length)h+='<table class="meta">'+rows.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('')+'</table>';
   h+='<div class="desc">'+md(n.desc)+'</div>';
@@ -1308,7 +1601,8 @@ function refreshForm(){
       .concat(sys.parent?sys.parent.children.filter(s=>s!==sys).map(s=>[s.name,s.name+' (system)']):[]);
     fillSel($('aFrom'),dests,true); fillSel($('aTo'),dests,true);
   }
-  show('f-color',t==='planet'||t==='moon'); show('f-pattern',t==='planet'||t==='moon');
+  show('f-color',false); show('f-pattern',t==='planet'||t==='moon');
+  show('f-setl',t==='planet'||t==='moon');
   show('f-rings',t==='planet'); show('f-size',t==='planet');
   show('f-look',t==='station'||t==='ship');
   if(t==='station')fillSel($('aLook'),[['','auto']].concat(stationLooks().map(k=>[k,k])),true);
@@ -1323,7 +1617,7 @@ function refreshForm(){
 }
 function fillOnce(){
   fillSel($('aColor'),[['','auto']].concat(PALNAMES.map(c=>[c,c])));
-  fillSel($('aPattern'),[['','auto']].concat(PATTERNS.map(p=>[p,p])));
+  fillSel($('aPattern'),[['','auto']].concat(WTYPES.map(p=>[p,p])));
   $('aX').value=10+Math.floor(Math.random()*80); $('aY').value=10+Math.floor(Math.random()*80);
 }
 function renderPreview(){
@@ -1331,13 +1625,14 @@ function renderPreview(){
   pc.fillStyle='#06070f'; pc.fillRect(0,0,64,64);
   const t=$('aType').value, nm=$('aName').value.trim()||'Preview';
   const fake={name:nm,type:t,meta:{}};
-  if(t==='planet'||t==='moon'){fake.meta.color=$('aColor').value;fake.meta.pattern=$('aPattern').value;fake.meta.rings=t==='planet'?$('aRings').value:''}
+  if(t==='planet'||t==='moon'){fake.meta.pattern=$('aPattern').value;fake.meta.rings=t==='planet'?$('aRings').value:'';if($('aSetl').value!=='')fake.meta.settlements=$('aSetl').value}
   if(t==='station'||t==='ship')fake.meta.look=$('aLook').value;
   CTX=pc; let note='';
   if(t==='planet'||t==='moon'){
     const r=+($('aSize').value)||(t==='moon'?6:11);
-    drawPlanet(32,32,t==='planet'?Math.min(14,r+3):r,fake);
-    if(!fake.meta.color||!fake.meta.pattern)note='auto look is hashed from the name \u2014 rename to reroll';
+    drawPlanet(32,32,t==='planet'?Math.min(14,r+3):r,fake,true);
+    const wt=PURE.TYPES[worldTypeOf(fake)].label;
+    note=wt+' \u2014 full world generates on first visit'+($('aPattern').value?'':' (type derived from the name)');
   }
   else if(SPRITE_ADD[t]){drawSprite(32,32,lookFor(fake),0,3);
     if((t==='station'||t==='ship')&&!fake.meta.look)note='auto sprite is hashed from the name'}
@@ -1362,7 +1657,7 @@ function formBlock(t,nm,depth){
   }
   if(t==='location'&&$('aSX').value!==''&&$('aSY').value!=='')meta.push('site: '+(+$('aSX').value)+', '+(+$('aSY').value));
   const mv=(id,k)=>{const v=$(id).value.trim();if(v)meta.push(k+': '+v)};
-  if(t==='planet'||t==='moon'){mv('aColor','color');mv('aPattern','pattern');if(t==='planet'&&$('aRings').value)meta.push('rings: yes');if(t==='planet')mv('aSize','size');
+  if(t==='planet'||t==='moon'){mv('aPattern','pattern');if($('aSetl').value!=='')meta.push('settlements: '+$('aSetl').value);if(t==='planet'&&$('aRings').value)meta.push('rings: yes');if(t==='planet')mv('aSize','size');
     mv('aAtmo','atmosphere');mv('aGrav','gravity');mv('aClim','climate');mv('aSurf','surface')}
   if(t==='station'||t==='ship')mv('aLook','look');
   if(t==='planet'||t==='moon'||t==='station'){mv('aPop','population');mv('aPort','port')}
@@ -1445,8 +1740,10 @@ function startEdit(node){
   else{$('aSX').value='';$('aSY').value=''}
   $('aStar').value=node.meta.star||'orange';
   $('aJump').value=node.meta.jump||'';
-  $('aColor').value=PAL[node.meta.color]?node.meta.color:'';
-  $('aPattern').value=PATTERNS.includes(node.meta.pattern)?node.meta.pattern:'';
+  $('aColor').value='';
+  {const p=(node.meta.pattern||'').toLowerCase();
+   $('aPattern').value=WTYPES.includes(p)?p:(WALIAS[p]||'')}
+  $('aSetl').value=node.meta.settlements!==undefined?String(Math.max(0,Math.min(4,parseInt(node.meta.settlements)||0))):'';
   $('aRings').value=/^(y|yes|true|1)/i.test(node.meta.rings||'')?'yes':'';
   $('aSize').value=node.meta.size||'';
   $('aLook').value=SPR[node.meta.look]?node.meta.look:'';
@@ -1477,7 +1774,7 @@ function setAddContext(){
 }
 fillOnce();
 ['aType','aParent','aPlace'].forEach(id=>$(id).addEventListener('change',refreshForm));
-['aName','aColor','aPattern','aRings','aSize','aLook','aStar'].forEach(id=>{$(id).addEventListener('input',renderPreview);$(id).addEventListener('change',renderPreview)});
+['aName','aColor','aPattern','aRings','aSize','aLook','aStar','aSetl'].forEach(id=>{$(id).addEventListener('input',renderPreview);$(id).addEventListener('change',renderPreview)});
 $('aInsert').onclick=submitForm;
 $('aCancel').onclick=()=>cancelEdit(true);
 document.getElementById('bReload').onclick=()=>{menu.classList.remove('open');
