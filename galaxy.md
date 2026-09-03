@@ -1,4 +1,4 @@
-# Sector: Charles's Wain
+# Sector: The Wain
 coords: 28, 70
 
 
