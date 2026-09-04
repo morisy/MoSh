@@ -9,24 +9,38 @@ star: red
 ### Moroi
 type: planet
 orbit: 3
-pattern: ocean
-rings: no
+pattern: waterworld
 atmosphere: thin, breathable
 climate: water planet
 surface: water
 population: 40,000
 port: C
-Color: teal
 factions: Tannhauser-Cloudbank
 
 #### Tannhauser-Cloudbank Moroi Underwater Research Lab
 type: location
 > GM: Site of Decagone.
 
+#### Dinoplex Fun Park
+type: location
+factions: Tannhauser-Cloudbank
+
+Escape with your family into the adventure and whimsy of the past.
+
 ## System: Alioth
 coords: 19, 82
 star: yellow
 jump: Lalande 21185 (2)
+
+### Absalom Station
+type: station
+orbit: 4
+look: spar
+population: 35,000
+port: C
+factions: Woodchest Holdings & Management
+
+Constructed as an orbital barracks, Absalom Station station was meant to serve as the hub for an anti-piracy task force. After that project was killed, it now serves as home to the desperate and those looking to escape. Cheap labor is you need a hired gun.
 
 ## System: Merak
 coords: 49, 92
@@ -46,6 +60,24 @@ factions: QuantumTek Materials
 type: location
 
 A remote mining asteroid base that has obtained new specimens for further study.
+
+### Anvolla
+type: planet
+orbit: 4
+pattern: desert
+settlements: 3
+size: 5
+atmosphere: Radioactive
+gravity: 2g
+climate: Hot wasteland
+port: A
+
+A radioactive wasteland that has somehow become the sector’s major hub of activity.
+
+#### Anvollapolis
+type: location
+
+A legality growing on the surface of Anvolla like a metal tick swollen with the blood of the world. The outer edges come with a strong risk of radiation poison; the city’s spire is home to the rich and powerful.
 
 ## System: Megrez
 coords: 49, 72
