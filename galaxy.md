@@ -128,7 +128,7 @@ factions: Independent
 
 A high-end casino that jumps from system to system, offering both hope for winning big and connecting with potential job leads, black market merchants and others that do business off the books.
 
-# Sector: Sector X
+# Sector: Atria Sector
 coords: 8, 30
 
 ## System: Atria
