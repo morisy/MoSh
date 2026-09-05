@@ -19,7 +19,7 @@ body{margin:0;background:#e8e8e8;color:var(--ink);
   padding:.45in .5in;box-shadow:0 2px 12px rgba(0,0,0,.35);position:relative}
 .chev{font-weight:800;letter-spacing:2px;font-size:13px;white-space:nowrap;
   overflow:hidden;margin:0 0 4px}
-.secbar{background:var(--ink);color:var(--paper);display:flex;
+.secbar{break-after:avoid;background:var(--ink);color:var(--paper);display:flex;
   justify-content:space-between;align-items:baseline;padding:6px 12px;margin:0 0 10px}
 .secbar h1{margin:0;font-size:26px;font-weight:800;text-transform:uppercase;
   letter-spacing:1px;font-stretch:condensed}
@@ -28,14 +28,15 @@ body{margin:0;background:#e8e8e8;color:var(--ink);
 svg{display:block;width:100%}
 svg text{font-family:"Helvetica Neue",Arial,sans-serif}
 .sysgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.sysgrid>div{break-inside:avoid;page-break-inside:avoid}
 .sysgrid .one{grid-column:1/3;max-width:60%;margin:0 auto}
 .index{border:2px solid var(--ink);margin-top:12px;padding:0 0 6px;
   break-inside:avoid}
-.index .ihead{background:var(--ink);color:var(--paper);display:flex;
+.index .ihead{break-after:avoid;background:var(--ink);color:var(--paper);display:flex;
   justify-content:space-between;padding:3px 10px;font-weight:800;
   text-transform:uppercase;font-size:12px;letter-spacing:1px}
-.index .cols{column-count:2;column-gap:22px;padding:8px 12px 2px}
-.ent{break-inside:avoid;margin:0 0 7px;font-size:11.5px;line-height:1.3}
+.index .cols{padding:7px 12px 2px}
+.ent{break-inside:avoid;page-break-inside:avoid;margin:0 0 6px;font-size:10.5px;line-height:1.3;max-width:6.4in}
 .ent .num{display:inline-block;min-width:17px;font-weight:800}
 .ent .nm{font-weight:800;text-transform:uppercase}
 .ent .kind{font-size:9.5px;font-weight:700;letter-spacing:.5px;
@@ -47,12 +48,12 @@ svg text{font-family:"Helvetica Neue",Arial,sans-serif}
   padding:1px 0 1px 6px;font-size:10.5px}
 .ent .gm::before{content:"WARDEN: ";font-weight:800;font-style:normal}
 .legend{border:2px solid var(--ink);display:inline-block;margin-top:12px;
-  min-width:2.4in;break-inside:avoid}
+  min-width:2.4in;break-inside:avoid;page-break-inside:avoid}
 .legend .ihead{background:var(--ink);color:var(--paper);padding:3px 10px;
   font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:1px}
 .legend .row{display:flex;align-items:center;gap:10px;padding:3px 12px;font-size:11.5px}
 .legend svg{width:30px;height:22px;flex:none}
-.foot{position:absolute;bottom:.28in;left:.5in;right:.5in;display:flex;
+.foot{margin-top:14px;border-top:2px solid var(--ink);padding-top:4px;display:flex;
   justify-content:space-between;font-size:10px;font-weight:700;
   letter-spacing:1px;text-transform:uppercase}
 .err{max-width:8.5in;margin:40px auto;background:#fff;padding:24px;font-size:14px}
@@ -60,8 +61,9 @@ svg text{font-family:"Helvetica Neue",Arial,sans-serif}
   body{background:#fff}
   .toolbar{display:none}
   .page{width:auto;min-height:auto;margin:0;padding:.15in .2in;box-shadow:none;
-    page-break-after:always}
-  .page:last-child{page-break-after:auto}
+    break-after:page;page-break-after:always}
+  .page+.page{break-before:page;page-break-before:always}
+  .page:last-child{break-after:auto;page-break-after:auto}
 }
 @page{margin:.4in}
 </style>
@@ -232,10 +234,12 @@ function sectorMapSVG(sec){
 
 /* ---- system orbit diagram ---- */
 function systemSVG(sys,numOf){
-  const W=360,Hh=330,cx=W/2,cy=Hh/2+8;
+  const W=350,Hh=300,cx=W/2,cy=Hh/2+16;   // +16 clears the title tag
   const bodies=sys.children.filter(c=>typeof c.orbit==='number');
   const maxO=Math.max(1,...bodies.map(b=>b.orbit));
-  const sr=15, gap=Math.min((Hh/2-40)/(maxO+.4),(W/2-34)/(maxO+.4));
+  const sr=14;
+  let gap=Math.min((cy-52)/(maxO+.4),(W/2-34)/(maxO+.4));
+  gap=Math.min(gap,54);                    // single-orbit systems stay modest
   let g='';
   // orbit rings (belts render as dotted rings instead of solid)
   const beltOrbits=new Set(bodies.filter(b=>b.type==='belt').map(b=>b.orbit));
@@ -247,25 +251,26 @@ function systemSVG(sys,numOf){
         :'stroke-width="1.1"')+'/>';
   }
   g+=starIcon(cx,cy,sr);
+  const clampY=y=>Math.max(38,Math.min(Hh-16,y));
   let badges='';
   bodies.forEach(b=>{
     const r=sr+8+b.orbit*gap, ang=((hash(b.name)%360)/180)*Math.PI;
     const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
     const bump=x>cx?1:-1;
     if(b.type==='belt'){
-      badges+=hexBadge(x+bump*16,y-14,numOf(b));
+      badges+=hexBadge(x+bump*16,clampY(y-14),numOf(b));
     }else if(b.type==='station'||b.type==='relay'){
       g+=stationIcon(x,y,1);
-      badges+=hexBadge(x+bump*20,y-14,numOf(b));
+      badges+=hexBadge(x+bump*20,clampY(y-14),numOf(b));
     }else if(b.type==='derelict'){
       g+=shipIcon(x,y,(hash(b.name)%360));
-      badges+=hexBadge(x+bump*20,y-14,numOf(b));
+      badges+=hexBadge(x+bump*20,clampY(y-14),numOf(b));
     }else{
       const pr=Math.max(5,Math.min(11,+(b.meta.size||0)||(5+hash(b.name+'r')%4)));
       g+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+pr+'" fill="#000"/>';
       if(/^(y|yes|true|1)/i.test(b.meta.rings||''))
         g+='<ellipse cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" rx="'+(pr+7)+'" ry="'+(pr*.42)+'" fill="none" stroke="#000" stroke-width="1.6"/>';
-      badges+=hexBadge(x+bump*(pr+14),y-(pr+8),numOf(b));
+      badges+=hexBadge(x+bump*(pr+14),clampY(y-(pr+8)),numOf(b));
       // satellites: small circles / station glyphs around the parent
       const sats=sys.children.concat(b.children).filter(c=>typeof c.orbit==='string'&&c.orbit.toLowerCase()===b.name.toLowerCase()&&c!==b);
       sats.forEach((s2,i)=>{
@@ -275,7 +280,7 @@ function systemSVG(sys,numOf){
         if(s2.type==='station'||s2.type==='relay')g+=stationIcon(sx2,sy2,.8);
         else if(s2.type==='ship'||s2.type==='derelict')g+=shipIcon(sx2,sy2,sa*57.3+90);
         else g+='<circle cx="'+sx2.toFixed(1)+'" cy="'+sy2.toFixed(1)+'" r="3.6" fill="#000"/>';
-        if(NUMBERED[s2.type])badges+=hexBadge(sx2+(sx2>x?14:-14),sy2-12,numOf(s2),9.5);
+        if(NUMBERED[s2.type])badges+=hexBadge(x+Math.cos(sa)*(sd+17),clampY(y+Math.sin(sa)*(sd+17)),numOf(s2),9.5);
       });
     }
   });
@@ -331,7 +336,7 @@ function indexHTML(sec,order,region){
 /* ---- page assembly ---- */
 function descendants(n,acc=[]){n.children.forEach(c=>{acc.push(c);descendants(c,acc)});return acc}
 function buildPages(root){
-  const chev='\u27eb'.repeat(60);
+  const chev='\u27eb'.repeat(46);
   let html='';
   root.children.forEach((sec,si)=>{
     // number bodies in document order across the sector
