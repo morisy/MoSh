@@ -1,0 +1,380 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Starchart — Print</title>
+<style>
+/* Print-first: black ink on white paper, system fonts only (works offline). */
+:root{--ink:#000;--paper:#fff}
+*{box-sizing:border-box}
+body{margin:0;background:#e8e8e8;color:var(--ink);
+  font-family:"Helvetica Neue",Arial,"Liberation Sans",sans-serif}
+.toolbar{position:sticky;top:0;background:#111;color:#fff;padding:8px 14px;
+  display:flex;gap:10px;align-items:center;z-index:5}
+.toolbar button{font:inherit;font-weight:700;text-transform:uppercase;
+  background:#fff;color:#000;border:0;padding:4px 12px;cursor:pointer}
+.toolbar .note{font-size:12px;opacity:.75}
+.page{background:var(--paper);width:8.5in;min-height:11in;margin:16px auto;
+  padding:.45in .5in;box-shadow:0 2px 12px rgba(0,0,0,.35);position:relative}
+.chev{font-weight:800;letter-spacing:2px;font-size:13px;white-space:nowrap;
+  overflow:hidden;margin:0 0 4px}
+.secbar{background:var(--ink);color:var(--paper);display:flex;
+  justify-content:space-between;align-items:baseline;padding:6px 12px;margin:0 0 10px}
+.secbar h1{margin:0;font-size:26px;font-weight:800;text-transform:uppercase;
+  letter-spacing:1px;font-stretch:condensed}
+.secbar .sub{font-size:11px;font-weight:700;letter-spacing:2px;text-transform:uppercase}
+.secdesc{font-style:italic;font-size:12.5px;margin:0 0 10px;line-height:1.35}
+svg{display:block;width:100%}
+svg text{font-family:"Helvetica Neue",Arial,sans-serif}
+.sysgrid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px}
+.sysgrid .one{grid-column:1/3;max-width:60%;margin:0 auto}
+.index{border:2px solid var(--ink);margin-top:12px;padding:0 0 6px;
+  break-inside:avoid}
+.index .ihead{background:var(--ink);color:var(--paper);display:flex;
+  justify-content:space-between;padding:3px 10px;font-weight:800;
+  text-transform:uppercase;font-size:12px;letter-spacing:1px}
+.index .cols{column-count:2;column-gap:22px;padding:8px 12px 2px}
+.ent{break-inside:avoid;margin:0 0 7px;font-size:11.5px;line-height:1.3}
+.ent .num{display:inline-block;min-width:17px;font-weight:800}
+.ent .nm{font-weight:800;text-transform:uppercase}
+.ent .kind{font-size:9.5px;font-weight:700;letter-spacing:.5px;
+  text-transform:uppercase;opacity:.8}
+.ent .d{font-style:italic}
+.ent .sub{margin:1px 0 0 17px}
+.ent .sub .tag{font-weight:800}
+.ent .gm{margin:2px 0 0 17px;border-left:3px solid var(--ink);
+  padding:1px 0 1px 6px;font-size:10.5px}
+.ent .gm::before{content:"WARDEN: ";font-weight:800;font-style:normal}
+.legend{border:2px solid var(--ink);display:inline-block;margin-top:12px;
+  min-width:2.4in;break-inside:avoid}
+.legend .ihead{background:var(--ink);color:var(--paper);padding:3px 10px;
+  font-weight:800;text-transform:uppercase;font-size:12px;letter-spacing:1px}
+.legend .row{display:flex;align-items:center;gap:10px;padding:3px 12px;font-size:11.5px}
+.legend svg{width:30px;height:22px;flex:none}
+.foot{position:absolute;bottom:.28in;left:.5in;right:.5in;display:flex;
+  justify-content:space-between;font-size:10px;font-weight:700;
+  letter-spacing:1px;text-transform:uppercase}
+.err{max-width:8.5in;margin:40px auto;background:#fff;padding:24px;font-size:14px}
+@media print{
+  body{background:#fff}
+  .toolbar{display:none}
+  .page{width:auto;min-height:auto;margin:0;padding:.15in .2in;box-shadow:none;
+    page-break-after:always}
+  .page:last-child{page-break-after:auto}
+}
+@page{margin:.4in}
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <button id="bOpen">Open file</button>
+  <button onclick="window.print()">Print</button>
+  <span class="note" id="status"></span>
+  <input type="file" id="file" accept=".md,.txt,.markdown" hidden>
+</div>
+<div id="pages"></div>
+
+<script>
+'use strict';
+/* ================= CONFIG =================
+   Same source file as the main app. A ?src=
+   in the URL overrides; #warden adds GM notes
+   to the printed index.                      */
+const DEFAULT_SRC='galaxy.md';
+/* ========================================== */
+const WARDEN=/warden/i.test(location.hash);
+
+/* ---- shared with starchart.html: hash + parser ---- */
+function hash(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function esc(s){return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function parse(text){
+  const root={depth:0,type:'galaxy',name:'Galaxy',meta:{},desc:[],gm:[],people:[],objects:[],children:[],line:0};
+  const stack=[root]; let cur=null, mode='none', gmbuf=null;
+  const flushGM=()=>{if(gmbuf){cur.gm.push(gmbuf.join('\n'));gmbuf=null}};
+  text.split(/\r?\n/).forEach((raw,i)=>{
+    const h=raw.match(/^(#{1,6})\s+(.*)$/);
+    if(h){
+      if(cur)flushGM();
+      const depth=h[1].length; let name=h[2].trim(); let type=null;
+      const pre=name.match(/^(sector|system|planet|moon|station|belt|location|body|derelict|asteroid|ship|relay)\s*:\s*(.*)$/i);
+      if(pre){type=pre[1].toLowerCase();name=pre[2].trim()}
+      const node={depth,type,name,meta:{},desc:[],gm:[],people:[],objects:[],children:[],line:i};
+      while(stack.length>1&&stack[stack.length-1].depth>=depth)stack.pop();
+      node.parent=stack[stack.length-1]; node.parent.children.push(node); stack.push(node);
+      cur=node; mode='meta'; return;
+    }
+    if(!cur)return;
+    const t=raw.trim();
+    if(mode==='meta'){
+      const m=t.match(/^([\w-]+)\s*:\s*(.*)$/);
+      if(m){cur.meta[m[1].toLowerCase()]=m[2].trim();return}
+      mode='body';
+    }
+    if(t.startsWith('>')){
+      let s=t.replace(/^>\s?/,'');
+      if(!gmbuf){gmbuf=[];s=s.replace(/^GM\s*:\s*/i,'')}
+      gmbuf.push(s); return;
+    }
+    flushGM();
+    const tr=t.match(/^[-*]\s*([@#])\s*(.+?)(?:\s+(?:\u2014|\u2013|-|:)\s+(.*))?$/);
+    if(tr){(tr[1]==='@'?cur.people:cur.objects).push({name:tr[2].trim(),note:tr[3]||''});return}
+    cur.desc.push(raw);
+  });
+  if(cur)flushGM();
+  const walk=n=>{
+    if(n.depth===1)n.type=n.type||'sector';
+    else if(n.depth===2)n.type=n.type||'system';
+    else if(n.depth>=3)n.type=(n.meta.type||n.type||(n.depth===3?'planet':n.depth>=5?'location':'moon')).toLowerCase();
+    if(n.meta.coords){const c=n.meta.coords.split(/[, ]+/).map(Number);n.x=c[0];n.y=c[1]}
+    n.orbit=(n.meta.orbit!==undefined&&n.meta.orbit!=='')?(isNaN(+n.meta.orbit)?n.meta.orbit:+n.meta.orbit):null;
+    n.children.forEach(walk);
+  };
+  root.children.forEach(walk);
+  return root;
+}
+const firstSentence=lines=>{
+  const t=lines.join(' ').replace(/\s+/g,' ').trim();
+  if(!t)return '';
+  const m=t.match(/^.*?[.!?](\s|$)/);
+  return (m?m[0]:t).trim();
+};
+
+/* ---- SVG helpers (pure string builders; testable headless) ---- */
+const NUMBERED={planet:1,moon:1,station:1,belt:1,derelict:1,relay:1};
+function hexBadge(x,y,n,r=11){
+  const pts=[];
+  for(let i=0;i<6;i++){const a=Math.PI/6+i*Math.PI/3;
+    pts.push((x+r*Math.cos(a)).toFixed(1)+','+(y+r*Math.sin(a)).toFixed(1))}
+  return '<polygon points="'+pts.join(' ')+'" fill="#fff" stroke="#000" stroke-width="2.2"/>'+
+    '<text x="'+x+'" y="'+(y+.5)+'" text-anchor="middle" dominant-baseline="middle" '+
+    'font-size="11.5" font-weight="800">'+n+'</text>';
+}
+function starIcon(x,y,r){
+  return '<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="#fff" stroke="#000" stroke-width="2"/>'+
+    '<circle cx="'+x+'" cy="'+y+'" r="'+(r+5)+'" fill="none" stroke="#000" stroke-width="1.3" stroke-dasharray="2 3.5"/>';
+}
+function stationIcon(x,y,s=1){
+  const g='<g transform="translate('+x+','+y+') scale('+s+')">';
+  return g+'<rect x="-9" y="-3" width="5" height="6" fill="none" stroke="#000" stroke-width="1.6"/>'+
+    '<rect x="4" y="-3" width="5" height="6" fill="none" stroke="#000" stroke-width="1.6"/>'+
+    '<rect x="-3.2" y="-4.5" width="6.4" height="9" rx="2.6" fill="#fff" stroke="#000" stroke-width="1.6"/>'+
+    '<line x1="0" y1="4.5" x2="0" y2="7.5" stroke="#000" stroke-width="1.6"/></g>';
+}
+function shipIcon(x,y,ang){
+  return '<g transform="translate('+x+','+y+') rotate('+ang+')">'+
+    '<polygon points="9,0 -7,5.5 -3.5,0 -7,-5.5" fill="#000"/></g>';
+}
+function railLine(x1,y1,x2,y2,dashed){
+  const d=dashed?' stroke-dasharray="7 5"':'';
+  return '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#000" stroke-width="5"'+d+'/>'+
+         '<line x1="'+x1+'" y1="'+y1+'" x2="'+x2+'" y2="'+y2+'" stroke="#fff" stroke-width="1.8"'+d+'/>';
+}
+function jPill(x,y,label){
+  return '<circle cx="'+x+'" cy="'+y+'" r="11.5" fill="#fff" stroke="#000" stroke-width="2"/>'+
+    '<text x="'+x+'" y="'+(y+.5)+'" text-anchor="middle" dominant-baseline="middle" '+
+    'font-size="10" font-weight="800">'+esc(label)+'</text>';
+}
+function nameTag(x,y,label,anchor){
+  const w=label.length*7.2+14;
+  const rx=anchor==='middle'?x-w/2:x;
+  return '<rect x="'+rx.toFixed(1)+'" y="'+(y-9)+'" width="'+w.toFixed(1)+'" height="17" fill="#000"/>'+
+    '<text x="'+(rx+w/2).toFixed(1)+'" y="'+(y+.5)+'" text-anchor="middle" dominant-baseline="middle" '+
+    'fill="#fff" font-size="11" font-weight="800" letter-spacing="1">'+esc(label.toUpperCase())+'</text>';
+}
+
+/* ---- sector jump chart ---- */
+function sectorMapSVG(sec){
+  const W=760,Hh=430,pad=70;
+  const pos={};
+  sec.children.forEach(s=>{
+    pos[s.name.toLowerCase()]=[pad+((s.x??50)/100)*(W-pad*2), pad+((s.y??50)/100)*(Hh-pad*2)];
+  });
+  const cx0=W/2, cy0=Hh/2;
+  let lines='',pills='',ext='',nodes='';
+  const seen=new Set();
+  sec.children.forEach(s=>{
+    (s.meta.jump||'').split(',').map(t=>t.trim()).filter(Boolean).forEach(t=>{
+      const m=t.match(/^(.*?)\s*(?:\((\d+(?:\.\d+)?)\))?$/);
+      const key=[s.name.toLowerCase(),m[1].toLowerCase()].sort().join('|');
+      if(seen.has(key))return; seen.add(key);
+      const A=pos[s.name.toLowerCase()], B=pos[m[1].toLowerCase()];
+      if(B){
+        lines+=railLine(A[0],A[1],B[0],B[1]);
+        if(m[2])pills+=jPill((A[0]+B[0])/2,(A[1]+B[1])/2,'J'+m[2]);
+      }else{
+        // route out of the sector: dashed rail toward the nearest edge + arrow
+        let dx=A[0]-cx0, dy=A[1]-cy0;
+        const L=Math.hypot(dx,dy)||1; dx/=L; dy/=L;
+        const ex=A[0]+dx*95, ey=A[1]+dy*95;
+        ext+=railLine(A[0],A[1],ex,ey,true);
+        const aa=Math.atan2(dy,dx);
+        ext+='<polygon points="'+(ex+Math.cos(aa)*10)+','+(ey+Math.sin(aa)*10)+' '+
+          (ex+Math.cos(aa+2.5)*9)+','+(ey+Math.sin(aa+2.5)*9)+' '+
+          (ex+Math.cos(aa-2.5)*9)+','+(ey+Math.sin(aa-2.5)*9)+'" fill="#000"/>';
+        if(m[2])ext+=jPill(A[0]+dx*48,A[1]+dy*48,'J'+m[2]);
+        ext+='<text x="'+(ex+dx*16)+'" y="'+(ey+dy*16)+'" text-anchor="'+(dx>0?'start':'end')+'" '+
+          'font-size="10.5" font-weight="800" letter-spacing="1">TO '+esc(m[1].toUpperCase())+'</text>';
+      }
+    });
+  });
+  sec.children.forEach(s=>{
+    const [x,y]=pos[s.name.toLowerCase()];
+    nodes+=starIcon(x,y,11);
+    const nb=s.children.filter(c=>c.type==='planet').length;
+    for(let i=0;i<nb;i++)nodes+='<circle cx="'+(x-nb*4+i*8+4)+'" cy="'+(y+24)+'" r="3" fill="#000"/>';
+    nodes+=nameTag(x,y+42,s.name,'middle');
+  });
+  return '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="Sector jump chart">'+
+    '<rect x="1.5" y="1.5" width="'+(W-3)+'" height="'+(Hh-3)+'" fill="#fff" stroke="#000" stroke-width="3"/>'+
+    lines+ext+pills+nodes+'</svg>';
+}
+
+/* ---- system orbit diagram ---- */
+function systemSVG(sys,numOf){
+  const W=360,Hh=330,cx=W/2,cy=Hh/2+8;
+  const bodies=sys.children.filter(c=>typeof c.orbit==='number');
+  const maxO=Math.max(1,...bodies.map(b=>b.orbit));
+  const sr=15, gap=Math.min((Hh/2-40)/(maxO+.4),(W/2-34)/(maxO+.4));
+  let g='';
+  // orbit rings (belts render as dotted rings instead of solid)
+  const beltOrbits=new Set(bodies.filter(b=>b.type==='belt').map(b=>b.orbit));
+  for(const b of bodies){
+    const r=sr+8+b.orbit*gap;
+    g+='<circle cx="'+cx+'" cy="'+cy+'" r="'+r.toFixed(1)+'" fill="none" stroke="#000" '+
+      (beltOrbits.has(b.orbit)&&b.type==='belt'
+        ?'stroke-width="2.2" stroke-dasharray="1.5 5.5" stroke-linecap="round"'
+        :'stroke-width="1.1"')+'/>';
+  }
+  g+=starIcon(cx,cy,sr);
+  let badges='';
+  bodies.forEach(b=>{
+    const r=sr+8+b.orbit*gap, ang=((hash(b.name)%360)/180)*Math.PI;
+    const x=cx+Math.cos(ang)*r, y=cy+Math.sin(ang)*r;
+    const bump=x>cx?1:-1;
+    if(b.type==='belt'){
+      badges+=hexBadge(x+bump*16,y-14,numOf(b));
+    }else if(b.type==='station'||b.type==='relay'){
+      g+=stationIcon(x,y,1);
+      badges+=hexBadge(x+bump*20,y-14,numOf(b));
+    }else if(b.type==='derelict'){
+      g+=shipIcon(x,y,(hash(b.name)%360));
+      badges+=hexBadge(x+bump*20,y-14,numOf(b));
+    }else{
+      const pr=Math.max(5,Math.min(11,+(b.meta.size||0)||(5+hash(b.name+'r')%4)));
+      g+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+pr+'" fill="#000"/>';
+      if(/^(y|yes|true|1)/i.test(b.meta.rings||''))
+        g+='<ellipse cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" rx="'+(pr+7)+'" ry="'+(pr*.42)+'" fill="none" stroke="#000" stroke-width="1.6"/>';
+      badges+=hexBadge(x+bump*(pr+14),y-(pr+8),numOf(b));
+      // satellites: small circles / station glyphs around the parent
+      const sats=sys.children.concat(b.children).filter(c=>typeof c.orbit==='string'&&c.orbit.toLowerCase()===b.name.toLowerCase()&&c!==b);
+      sats.forEach((s2,i)=>{
+        const sa=ang+1.1+i*1.15, sd=pr+13+i*11;
+        const sx2=x+Math.cos(sa)*sd, sy2=y+Math.sin(sa)*sd;
+        g+='<circle cx="'+x.toFixed(1)+'" cy="'+y.toFixed(1)+'" r="'+sd+'" fill="none" stroke="#000" stroke-width=".8" stroke-dasharray="1 3"/>';
+        if(s2.type==='station'||s2.type==='relay')g+=stationIcon(sx2,sy2,.8);
+        else if(s2.type==='ship'||s2.type==='derelict')g+=shipIcon(sx2,sy2,sa*57.3+90);
+        else g+='<circle cx="'+sx2.toFixed(1)+'" cy="'+sy2.toFixed(1)+'" r="3.6" fill="#000"/>';
+        if(NUMBERED[s2.type])badges+=hexBadge(sx2+(sx2>x?14:-14),sy2-12,numOf(s2),9.5);
+      });
+    }
+  });
+  return '<svg viewBox="0 0 '+W+' '+Hh+'" role="img" aria-label="'+esc(sys.name)+' system diagram">'+
+    g+badges+
+    '<g>'+nameTag(cx,20,sys.name+' system','middle')+'</g></svg>';
+}
+
+/* ---- legend ---- */
+function legendHTML(){
+  const row=(svg,label)=>'<div class="row"><svg viewBox="0 0 30 22">'+svg+'</svg>'+label+'</div>';
+  return '<div class="legend"><div class="ihead">Icons</div>'+
+    row('<circle cx="15" cy="11" r="7" fill="#000"/>','Planet')+
+    row(starIcon(15,11,6),'Local star')+
+    row(stationIcon(15,11,.9),'Station')+
+    row('<circle cx="15" cy="11" r="8" fill="none" stroke="#000" stroke-width="2" stroke-dasharray="1.5 4.5" stroke-linecap="round"/>','Asteroid belt')+
+    row(shipIcon(15,11,-20),'Ship / derelict')+
+    row(hexBadge(15,11,'1',8.5),'Index number')+
+    '</div>';
+}
+
+/* ---- numbered index ---- */
+function indexHTML(sec,order,region){
+  let out='<div class="index"><div class="ihead"><span>'+esc(sec.name)+'</span><span>'+esc(region)+'</span></div><div class="cols">';
+  let curSys=null;
+  order.forEach(({n,num})=>{
+    const sys=(p=>{while(p&&p.type!=='system')p=p.parent;return p})(n);
+    if(sys&&sys!==curSys){curSys=sys;
+      out+='<div class="ent" style="border-top:1.5px solid #000;padding-top:4px"><span class="nm">'+esc(sys.name)+' system</span>'+
+        (sys.meta.star?' <span class="kind">'+esc(sys.meta.star)+' star</span>':'')+
+        (firstSentence(sys.desc)?'<div class="d">'+esc(firstSentence(sys.desc))+'</div>':'')+
+        (WARDEN&&sys.gm.length?'<div class="gm">'+esc(sys.gm.join(' '))+'</div>':'')+'</div>';
+    }
+    const bits=[n.type];
+    if(n.meta.port&&n.meta.port.toLowerCase()!=='none')bits.push('port '+n.meta.port);
+    if(n.meta.population)bits.push('pop '+n.meta.population);
+    out+='<div class="ent"><span class="num">'+num+'.</span> <span class="nm">'+esc(n.name)+'</span> '+
+      '<span class="kind">'+esc(bits.join(' \u00b7 '))+'</span>';
+    const d=firstSentence(n.desc);
+    if(d)out+='<div class="d" style="margin-left:17px">'+esc(d)+'</div>';
+    n.children.filter(c=>c.type==='location').forEach(l=>{
+      out+='<div class="sub"><span class="tag">\u25a3</span> '+esc(l.name)+
+        (firstSentence(l.desc)?' <span class="d">\u2014 '+esc(firstSentence(l.desc))+'</span>':'')+'</div>';
+      if(WARDEN&&l.gm.length)out+='<div class="gm">'+esc(l.gm.join(' '))+'</div>';
+    });
+    n.people.forEach(p=>out+='<div class="sub"><span class="tag">@</span> '+esc(p.name)+(p.note?' <span class="d">\u2014 '+esc(p.note)+'</span>':'')+'</div>');
+    n.objects.forEach(o=>out+='<div class="sub"><span class="tag">#</span> '+esc(o.name)+(o.note?' <span class="d">\u2014 '+esc(o.note)+'</span>':'')+'</div>');
+    if(WARDEN&&n.gm.length)out+='<div class="gm">'+esc(n.gm.join(' '))+'</div>';
+  });
+  return out+'</div></div>';
+}
+
+/* ---- page assembly ---- */
+function descendants(n,acc=[]){n.children.forEach(c=>{acc.push(c);descendants(c,acc)});return acc}
+function buildPages(root){
+  const chev='\u27eb'.repeat(60);
+  let html='';
+  root.children.forEach((sec,si)=>{
+    // number bodies in document order across the sector
+    const order=[];let num=0;
+    descendants(sec).forEach(n=>{if(NUMBERED[n.type])order.push({n,num:++num})});
+    const numOf=n=>{const e=order.find(o=>o.n===n);return e?e.num:'?'};
+    const systems=sec.children.filter(c=>c.type==='system');
+    const region=WARDEN?'Warden copy':'Sector chart';
+    html+='<div class="page">'+
+      '<div class="chev">'+chev+'</div>'+
+      '<div class="secbar"><h1>'+esc(sec.name)+'</h1><span class="sub">'+esc(region)+'</span></div>'+
+      (firstSentence(sec.desc)?'<p class="secdesc">'+esc(firstSentence(sec.desc))+'</p>':'')+
+      sectorMapSVG(sec)+
+      '<div class="sysgrid">'+
+        systems.map(s=>'<div'+(systems.length===1?' class="one"':'')+'>'+systemSVG(s,numOf)+'</div>').join('')+
+      '</div>'+
+      legendHTML()+
+      indexHTML(sec,order,region)+
+      '<div class="foot"><span>Starchart</span><span>'+esc(sec.name)+'</span><span>'+(si+1)+'</span></div>'+
+    '</div>';
+  });
+  return html||'<div class="err">No sectors found in the loaded file.</div>';
+}
+function render(text){
+  const src=WARDEN?text:text.split(/\r?\n/).filter(l=>!/^\s*>/.test(l)).join('\n');
+  document.getElementById('pages').innerHTML=buildPages(parse(src));
+}
+
+/* ---- boot ---- */
+const status=document.getElementById('status');
+document.getElementById('bOpen').onclick=()=>document.getElementById('file').click();
+document.getElementById('file').onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  f.text().then(t=>{render(t);status.textContent=f.name+(WARDEN?' \u00b7 warden copy':'')});
+};
+const q=new URLSearchParams(location.search);
+const SRC=q.get('src')||DEFAULT_SRC;
+if(SRC){
+  fetch(SRC).then(r=>{if(!r.ok)throw new Error(r.status);return r.text()})
+    .then(t=>{render(t);status.textContent=SRC.split('/').pop()+(WARDEN?' \u00b7 warden copy \u2014 GM notes included':'')})
+    .catch(()=>{document.getElementById('pages').innerHTML=
+      '<div class="err">Could not load <b>'+esc(SRC)+'</b>. Use Open file, or host this page next to your galaxy markdown.</div>'});
+}
+</script>
+</body>
+</html>
