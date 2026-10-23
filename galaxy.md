@@ -105,7 +105,7 @@ Balonov was a mining colony. The primary resources have been extracted, leaving 
 type: location
 factions: Seer Microsystems
 
-#### Asclepius
+#### Telltune
 type: moon
 orbit: Balonov
 color: teal
@@ -118,7 +118,7 @@ population: 300
 port: C
 factions: QuantumTek Materials
 
-Despite being an unlikely fate for a micro moon, Asclepius has carved out a niche as a medical center, with several medical facilities that often share shipments of key equipment and even personnel.
+Despite being an unlikely fate for a micro moon, Telltune has carved out a niche as a medical center, with several medical facilities that often share shipments of key equipment and even personnel.
 
 #### Year of the Rat
 type: ship
